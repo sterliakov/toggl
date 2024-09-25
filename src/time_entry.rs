@@ -102,6 +102,31 @@ impl TimeEntry {
         }
     }
 
+    pub async fn delete(self, client: &Client) -> Result<()> {
+        let mut res = client
+            .delete(
+                [
+                    Client::BASE_URL.to_string(),
+                    format!(
+                        "/api/v9/workspaces/{}/time_entries/{}",
+                        self.workspace_id, self.id
+                    ),
+                ]
+                .join(""),
+            )
+            .send()
+            .await?;
+        let status = res.status();
+        if !status.is_success() {
+            Err(surf::Error::from_str(
+                status,
+                str::from_utf8(&res.body_bytes().await?)?.to_string(),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
     fn duration_string(&self) -> String {
         duration_to_hms(&Duration::from_secs(self.duration.max(0) as u64))
     }

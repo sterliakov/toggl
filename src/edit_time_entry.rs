@@ -1,7 +1,7 @@
 use iced::widget::{
     button, column, container, row, scrollable, text, text_editor, text_input,
 };
-use iced::{Element, Fill, Task as Command};
+use iced::{Element, Fill, Length, Right, Task as Command};
 use time::{format_description, OffsetDateTime, PrimitiveDateTime};
 
 use crate::client::Client;
@@ -23,6 +23,7 @@ pub enum EditTimeEntryMessage {
     StartEdited(String),
     StopEdited(String),
     Submit,
+    Delete,
     Completed,
     Error(String),
 }
@@ -46,6 +47,11 @@ impl EditTimeEntry {
 
     pub fn view(&self) -> Element<EditTimeEntryMessage> {
         let content = column![
+            column![
+                button("X")
+                    .on_press(EditTimeEntryMessage::Completed)
+                    .style(button::text),
+            ].align_x(Right).width(Fill),
             text_editor(&self.description_content)
                 .on_action(EditTimeEntryMessage::DescriptionEdited),
             row![
@@ -57,9 +63,16 @@ impl EditTimeEntry {
                     .on_input(EditTimeEntryMessage::StopEdited),
             ]
             .spacing(20),
-            button("Save")
-                .on_press(EditTimeEntryMessage::Submit)
-                .style(button::primary)
+            row![
+                button("Save")
+                    .on_press(EditTimeEntryMessage::Submit)
+                    .style(button::primary)
+                    .width(Length::FillPortion(1)),
+                button("Delete")
+                    .on_press(EditTimeEntryMessage::Delete)
+                    .style(button::danger)
+                    .width(Length::FillPortion(1)),
+            ].spacing(20),
         ]
         .push_maybe(self.error.clone().map(|e| text(e).style(text::danger)))
         .spacing(10);
@@ -120,6 +133,12 @@ impl EditTimeEntry {
                     self.api_token.clone(),
                 ));
             }
+            EditTimeEntryMessage::Delete => {
+                return Command::future(Self::delete(
+                    self.entry.clone(),
+                    self.api_token.clone(),
+                ));
+            }
             EditTimeEntryMessage::Completed => {}
             EditTimeEntryMessage::Error(err) => {
                 self.error = Some(err.clone());
@@ -135,6 +154,20 @@ impl EditTimeEntry {
         let client = &Client::from_api_token(&api_token);
         if let Err(message) =
             entry.save(client).await.map_err(|e| e.to_string())
+        {
+            EditTimeEntryMessage::Error(message)
+        } else {
+            EditTimeEntryMessage::Completed
+        }
+    }
+
+    async fn delete(
+        entry: TimeEntry,
+        api_token: String,
+    ) -> EditTimeEntryMessage {
+        let client = &Client::from_api_token(&api_token);
+        if let Err(message) =
+            entry.delete(client).await.map_err(|e| e.to_string())
         {
             EditTimeEntryMessage::Error(message)
         } else {
