@@ -1,19 +1,19 @@
 // use iced::keyboard;
-use iced::widget::{
-    center, column, container, scrollable, text
-};
+use iced::widget::{center, column, container, scrollable, text};
 // use iced::window;
 use iced::{Center, Element, Fill, Task as Command};
 
 use serde::{Deserialize, Serialize};
 
 mod client;
+mod edit_time_entry;
 mod login;
 mod time_entry;
 
 use crate::client::{Client, Result as NetResult};
+use crate::edit_time_entry::{EditTimeEntry, EditTimeEntryMessage};
 use crate::login::{LoginScreen, LoginScreenMessage};
-use crate::time_entry::TimeEntry;
+use crate::time_entry::{TimeEntry, TimeEntryMessage};
 
 pub fn main() -> iced::Result {
     iced::application(App::title, App::update, App::view)
@@ -22,12 +22,13 @@ pub fn main() -> iced::Result {
         .run_with(App::new)
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 enum App {
     Loading,
     Unauthed(LoginScreen),
     Authed,
     Loaded(State),
+    EditEntry(EditTimeEntry),
 }
 
 #[derive(Clone, Debug, Default)]
@@ -40,7 +41,9 @@ struct State {
 enum Message {
     Loaded(Result<SavedState, LoadError>),
     DataFetched(NetResult<State>),
-    LoginMessage(LoginScreenMessage),
+    LoginProxy(LoginScreenMessage),
+    TimeEntryProxy(TimeEntryMessage),
+    EditTimeEntryProxy(EditTimeEntryMessage),
     Discarded,
 }
 
@@ -58,20 +61,22 @@ impl App {
 
     fn update(&mut self, message: Message) -> Command<Message> {
         match self {
-            App::Loading => match message {
+            Self::Loading => match message {
                 Message::Loaded(Ok(state)) => {
-                    *self = App::Authed;
-                    Command::future(App::load_everything(state.api_token))
+                    *self = Self::Authed;
+                    Command::future(Self::load_everything(state.api_token))
                 }
                 Message::Loaded(_) => {
-                    *self = App::Unauthed(LoginScreen::new());
+                    *self = Self::Unauthed(LoginScreen::new());
                     Command::none()
                 }
                 _ => Command::none(),
             },
-            App::Unauthed(screen) => match message {
-                Message::LoginMessage(LoginScreenMessage::Completed(Ok(api_token))) => {
-                    *self = App::Authed;
+            Self::Unauthed(screen) => match message {
+                Message::LoginProxy(LoginScreenMessage::Completed(Ok(
+                    api_token,
+                ))) => {
+                    *self = Self::Authed;
                     Command::batch(vec![
                         Command::future(
                             SavedState {
@@ -80,22 +85,43 @@ impl App {
                             .save(),
                         )
                         .map(|_| Message::Discarded),
-                        Command::future(App::load_everything(api_token)),
+                        Command::future(Self::load_everything(api_token)),
                     ])
                 }
-                Message::LoginMessage(msg) => {
-                    screen.update(msg).map(|msg| Message::LoginMessage(msg))
+                Message::LoginProxy(msg) => {
+                    screen.update(msg).map(Message::LoginProxy)
                 }
                 _ => Command::none(),
             },
-            App::Authed => match message {
+            Self::Authed => match message {
                 Message::DataFetched(Ok(state)) => {
-                    *self = App::Loaded(state);
+                    *self = Self::Loaded(state);
                     Command::none()
                 }
                 _ => Command::none(),
             },
-            _ => Command::none(),
+            Self::Loaded(state) => match message {
+                Message::TimeEntryProxy(TimeEntryMessage::Edit(i)) => {
+                    *self = Self::EditEntry(EditTimeEntry::new(
+                        state.time_entries[i].clone(),
+                        &state.api_token,
+                    ));
+                    Command::none()
+                }
+                _ => Command::none(),
+            },
+            Self::EditEntry(screen) => match message {
+                Message::EditTimeEntryProxy(
+                    EditTimeEntryMessage::Completed,
+                ) => {
+                    *self = Self::Loading;
+                    Command::perform(SavedState::load(), Message::Loaded)
+                }
+                Message::EditTimeEntryProxy(msg) => {
+                    screen.update(msg).map(Message::EditTimeEntryProxy)
+                }
+                _ => Command::none(),
+            },
         }
     }
 
@@ -103,16 +129,18 @@ impl App {
         match self {
             App::Loading => loading_message(),
             App::Authed => loading_message(),
-            App::Unauthed(screen) => screen.view().map(move |msg| Message::LoginMessage(msg)),
+            App::Unauthed(screen) => screen.view().map(Message::LoginProxy),
             App::Loaded(State { time_entries, .. }) => {
-                let content = column(
-                    time_entries
-                        .iter()
-                        .map(|task| task.view().map(|_| Message::Discarded)),
-                )
-                .spacing(10);
+                let content =
+                    column(time_entries.iter().enumerate().map(|(i, task)| {
+                        task.view(i).map(Message::TimeEntryProxy)
+                    }))
+                    .spacing(10);
 
                 scrollable(container(content).center_x(Fill).padding(40)).into()
+            }
+            App::EditEntry(screen) => {
+                screen.view().map(Message::EditTimeEntryProxy)
             }
         }
     }
@@ -210,7 +238,8 @@ impl SavedState {
     async fn save(self) -> Result<(), SaveError> {
         use async_std::prelude::*;
 
-        let json = serde_json::to_string_pretty(&self).map_err(|_| SaveError::Format)?;
+        let json = serde_json::to_string_pretty(&self)
+            .map_err(|_| SaveError::Format)?;
 
         let path = Self::path();
 

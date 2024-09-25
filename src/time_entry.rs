@@ -1,5 +1,9 @@
-use iced::Element;
-use iced::widget::text;
+use core::str;
+use std::time::Duration;
+
+use iced::alignment::Vertical;
+use iced::widget::{button, row, text};
+use iced::{Element, Length};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
@@ -71,17 +75,66 @@ impl TimeEntry {
             .body_json::<Vec<Self>>()
             .await
     }
+
+    pub async fn save(&self, client: &Client) -> Result<()> {
+        let mut res = client
+            .put(
+                [
+                    Client::BASE_URL.to_string(),
+                    format!(
+                        "/api/v9/workspaces/{}/time_entries/{}",
+                        self.workspace_id, self.id
+                    ),
+                ]
+                .join(""),
+            )
+            .body_json(&self)?
+            .send()
+            .await?;
+        let status = res.status();
+        if !status.is_success() {
+            Err(surf::Error::from_str(
+                status,
+                str::from_utf8(&res.body_bytes().await?)?.to_string(),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn duration_string(&self) -> String {
+        duration_to_hms(&Duration::from_secs(self.duration.max(0) as u64))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum TimeEntryMessage {
+    Edit(usize),
 }
 
 impl TimeEntry {
-    pub fn view(&self) -> Element<()> {
-        text(
-            self.description
-                .clone()
-                .unwrap_or("<NO DESCRIPTION>".to_string()),
+    pub fn view(&self, i: usize) -> Element<TimeEntryMessage> {
+        let name = self.description.clone().unwrap_or("<>".to_string());
+        button(
+            row![
+                text(name).width(Length::Fill),
+                text(self.duration_string()).width(Length::Fixed(60f32))
+            ]
+            .spacing(10)
+            .align_y(Vertical::Center),
         )
+        .on_press(TimeEntryMessage::Edit(i))
+        .clip(true)
+        .style(button::text)
         .into()
     }
+}
+
+fn duration_to_hms(duration: &Duration) -> String {
+    let seconds = duration.as_secs() % 60;
+    let minutes = (duration.as_secs() / 60) % 60;
+    let hours = (duration.as_secs() / 60) / 60;
+    format!("{}:{:0>2}:{:0>2}", hours, minutes, seconds)
 }
 
 #[cfg(test)]

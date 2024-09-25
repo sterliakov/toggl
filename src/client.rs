@@ -49,8 +49,12 @@ impl Middleware for AuthMiddleware {
         next: Next<'_>,
     ) -> Result<Response> {
         req.set_header("Content-Type", "application/json");
-        let auth_encoded = STANDARD.encode(format!("{}:{}", self.0, self.1).into_bytes());
-        req.set_header("Authorization", format!("Basic {auth_encoded}").as_str());
+        let auth_encoded =
+            STANDARD.encode(format!("{}:{}", self.0, self.1).into_bytes());
+        req.set_header(
+            "Authorization",
+            format!("Basic {auth_encoded}").as_str(),
+        );
         next.run(req, client).await
     }
 }

@@ -40,12 +40,22 @@ impl LoginScreen {
         scrollable(container(content).center_x(Fill).padding(40)).into()
     }
 
-    pub fn update(&mut self, message: LoginScreenMessage) -> Command<LoginScreenMessage> {
+    pub fn update(
+        &mut self,
+        message: LoginScreenMessage,
+    ) -> Command<LoginScreenMessage> {
         match &message {
-            LoginScreenMessage::EmailEdited(email) => self.email = email.clone(),
-            LoginScreenMessage::PasswordEdited(password) => self.password = password.clone(),
+            LoginScreenMessage::EmailEdited(email) => {
+                self.email = email.clone()
+            }
+            LoginScreenMessage::PasswordEdited(password) => {
+                self.password = password.clone()
+            }
             LoginScreenMessage::Submit => {
-                return Command::future(Self::submit(self.email.clone(), self.password.clone()));
+                return Command::future(Self::submit(
+                    self.email.clone(),
+                    self.password.clone(),
+                ));
             }
             LoginScreenMessage::Completed(_) => {}
         };
@@ -61,7 +71,7 @@ impl LoginScreen {
     }
 
     async fn call_submit(email: &str, password: &str) -> NetResult<String> {
-        let client = Client::from_email_password(&email, &password);
+        let client = Client::from_email_password(email, password);
         let data = client
             .get([Client::BASE_URL, "/api/v9/me"].join(""))
             .send()
