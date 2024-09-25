@@ -13,31 +13,11 @@ use crate::client::{Client, Result};
 pub struct TimeEntry {
     pub at: String,
     pub billable: bool,
-    // client_name: String;
     pub description: Option<String>,
     pub duration: i64,
-    // "duronly": {
-    //     "description": "Used to create a TE with a duration but without a stop time, this field is deprecated for GET endpoints where the value will always be true.",
-    //     "type": "boolean"
-    // },
     pub id: u64,
     pub permissions: Option<Vec<String>>,
-    // "pid": {
-    //     "description": "Project ID, legacy field",
-    //     "type": "integer"
-    // },
-    // pub project_active: bool,
-    // pub project_billable: bool,
-    // pub project_color: String,
     pub project_id: Option<u64>,
-    // pub project_name: String,
-    // "shared_with": {
-    //     "description": "Indicates who the time entry has been shared with",
-    //     "type": "array",
-    //     "items": {
-    //         "$ref": "#/definitions/models.TimeEntrySharedWith"
-    //     }
-    // },
     #[serde(with = "time::serde::rfc3339")]
     pub start: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339::option")]
@@ -47,22 +27,7 @@ pub struct TimeEntry {
     pub tag_ids: Vec<u64>,
     pub tags: Vec<String>,
     pub task_id: Option<u64>,
-    // pub task_name: String,
-    // "tid": {
-    //     "description": "Task ID, legacy field",
-    //     "type": "integer"
-    // },
-    // "uid": {
-    //     "description": "Time Entry creator ID, legacy field",
-    //     "type": "integer"
-    // },
-    // pub user_avatar_url: String,
     pub user_id: u64,
-    // pub user_name: String,
-    // "wid": {
-    //     "description": "Workspace ID, legacy field",
-    //     "type": "integer"
-    // },
     pub workspace_id: u64,
 }
 

@@ -47,11 +47,11 @@ impl EditTimeEntry {
 
     pub fn view(&self) -> Element<EditTimeEntryMessage> {
         let content = column![
-            column![
-                button("X")
-                    .on_press(EditTimeEntryMessage::Completed)
-                    .style(button::text),
-            ].align_x(Right).width(Fill),
+            column![button("X")
+                .on_press(EditTimeEntryMessage::Completed)
+                .style(button::text),]
+            .align_x(Right)
+            .width(Fill),
             text_editor(&self.description_content)
                 .on_action(EditTimeEntryMessage::DescriptionEdited),
             row![
@@ -72,7 +72,8 @@ impl EditTimeEntry {
                     .on_press(EditTimeEntryMessage::Delete)
                     .style(button::danger)
                     .width(Length::FillPortion(1)),
-            ].spacing(20),
+            ]
+            .spacing(20),
         ]
         .push_maybe(self.error.clone().map(|e| text(e).style(text::danger)))
         .spacing(10);
@@ -84,16 +85,16 @@ impl EditTimeEntry {
         &mut self,
         message: EditTimeEntryMessage,
     ) -> Command<EditTimeEntryMessage> {
-        match &message {
+        match message {
             EditTimeEntryMessage::DescriptionEdited(action) => {
-                self.description_content.perform(action.clone());
+                self.description_content.perform(action);
                 self.entry.description = Some(self.description_content.text());
             }
             EditTimeEntryMessage::StartEdited(start) => {
-                self.start_text = start.clone();
+                self.start_text = start;
             }
             EditTimeEntryMessage::StopEdited(stop) => {
-                self.stop_text = stop.clone();
+                self.stop_text = stop;
             }
             EditTimeEntryMessage::Submit => {
                 {
@@ -141,7 +142,7 @@ impl EditTimeEntry {
             }
             EditTimeEntryMessage::Completed => {}
             EditTimeEntryMessage::Error(err) => {
-                self.error = Some(err.clone());
+                self.error = Some(err);
             }
         };
         Command::none()

@@ -44,12 +44,12 @@ impl LoginScreen {
         &mut self,
         message: LoginScreenMessage,
     ) -> Command<LoginScreenMessage> {
-        match &message {
+        match message {
             LoginScreenMessage::EmailEdited(email) => {
-                self.email = email.clone()
+                self.email = email
             }
             LoginScreenMessage::PasswordEdited(password) => {
-                self.password = password.clone()
+                self.password = password
             }
             LoginScreenMessage::Submit => {
                 return Command::future(Self::submit(
