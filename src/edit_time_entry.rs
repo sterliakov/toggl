@@ -2,10 +2,10 @@ use iced::widget::{
     button, column, container, row, scrollable, text, text_editor, text_input,
 };
 use iced::{Element, Fill, Length, Right, Task as Command};
-use time::{format_description, OffsetDateTime, PrimitiveDateTime};
 
 use crate::client::Client;
 use crate::time_entry::TimeEntry;
+use crate::utils::{datetime_as_human_readable, datetime_from_human_readable};
 
 #[derive(Debug)]
 pub struct EditTimeEntry {
@@ -31,8 +31,8 @@ pub enum EditTimeEntryMessage {
 impl EditTimeEntry {
     pub fn new(entry: TimeEntry, api_token: &str) -> Self {
         let description = entry.description.clone();
-        let start_text = date_as_human_readable(&Some(entry.start));
-        let stop_text = date_as_human_readable(&entry.stop);
+        let start_text = datetime_as_human_readable(&Some(entry.start));
+        let stop_text = datetime_as_human_readable(&entry.stop);
         Self {
             entry,
             api_token: api_token.to_string(),
@@ -98,7 +98,7 @@ impl EditTimeEntry {
             }
             EditTimeEntryMessage::Submit => {
                 {
-                    let Ok(maybe_date) = date_from_human_readable(
+                    let Ok(maybe_date) = datetime_from_human_readable(
                         &self.start_text,
                         &self.entry.start,
                     ) else {
@@ -114,7 +114,7 @@ impl EditTimeEntry {
                     self.entry.start = date;
                 }
                 {
-                    let Ok(date) = date_from_human_readable(
+                    let Ok(date) = datetime_from_human_readable(
                         &self.stop_text,
                         &self.entry.start,
                     ) else {
@@ -175,27 +175,4 @@ impl EditTimeEntry {
             EditTimeEntryMessage::Completed
         }
     }
-}
-
-const FORMAT: &str = "[day]/[month]/[year] [hour]:[minute]:[second]";
-
-fn date_as_human_readable(date: &Option<OffsetDateTime>) -> String {
-    if let Some(date) = date {
-        let format = format_description::parse_borrowed::<2>(FORMAT).unwrap();
-        date.format(&format).unwrap()
-    } else {
-        "".to_string()
-    }
-}
-
-fn date_from_human_readable(
-    new_input: &str,
-    old_date: &OffsetDateTime,
-) -> time::Result<Option<OffsetDateTime>> {
-    if new_input.is_empty() {
-        return Ok(None);
-    }
-    let format = format_description::parse_borrowed::<2>(FORMAT).unwrap();
-    let new_date = PrimitiveDateTime::parse(new_input, &format)?;
-    Ok(Some(new_date.assume_offset(old_date.offset())))
 }

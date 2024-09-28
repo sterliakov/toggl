@@ -30,6 +30,7 @@ impl LoginScreen {
                 .on_input(LoginScreenMessage::EmailEdited),
             text_input("Password", &self.password)
                 .id("password-input")
+                .secure(true)
                 .on_input(LoginScreenMessage::PasswordEdited),
             button("Login")
                 .on_press(LoginScreenMessage::Submit)
@@ -45,9 +46,7 @@ impl LoginScreen {
         message: LoginScreenMessage,
     ) -> Command<LoginScreenMessage> {
         match message {
-            LoginScreenMessage::EmailEdited(email) => {
-                self.email = email
-            }
+            LoginScreenMessage::EmailEdited(email) => self.email = email,
             LoginScreenMessage::PasswordEdited(password) => {
                 self.password = password
             }

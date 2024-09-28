@@ -21,6 +21,21 @@ impl Client {
     pub fn from_api_token(api_token: &str) -> Self {
         Self::from_email_password(api_token, "api_token")
     }
+
+    pub async fn check_status(res: &mut surf::Response) -> Result<()> {
+        let status = res.status();
+        if !status.is_success() {
+            let binary = &res.body_bytes().await?;
+            let msg = if binary.is_empty() {
+                status.to_string()
+            } else {
+                std::str::from_utf8(binary)?.to_string()
+            };
+            Err(surf::Error::from_str(status, msg))
+        } else {
+            Ok(())
+        }
+    }
 }
 
 impl Deref for Client {

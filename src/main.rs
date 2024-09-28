@@ -1,145 +1,333 @@
-// use iced::keyboard;
-use iced::widget::{center, column, container, scrollable, text};
-// use iced::window;
-use iced::{Center, Element, Fill, Task as Command};
+use iced::widget::{
+    center, column, container, horizontal_rule, row, scrollable, text,
+    text_input,
+};
+use iced::window;
+use iced::{Center, Element, Fill, Padding, Task as Command};
+use itertools::Itertools;
+use lazy_static::lazy_static;
 
 use serde::{Deserialize, Serialize};
 
 mod client;
 mod edit_time_entry;
 mod login;
+mod project;
+mod related_info;
 mod time_entry;
+mod utils;
+mod workspace;
 
-use crate::client::{Client, Result as NetResult};
+use crate::client::Client;
 use crate::edit_time_entry::{EditTimeEntry, EditTimeEntryMessage};
 use crate::login::{LoginScreen, LoginScreenMessage};
+use crate::project::Project;
+use crate::related_info::ExtendedMe;
+use crate::time_entry::CreateTimeEntry;
 use crate::time_entry::{TimeEntry, TimeEntryMessage};
+use crate::utils::date_as_human_readable;
+use crate::workspace::Workspace;
 
 pub fn main() -> iced::Result {
     iced::application(App::title, App::update, App::view)
-        // .subscription(App::subscription)
-        .window_size((500.0, 800.0))
+        .subscription(App::subscription)
+        .window_size((500.0, 600.0))
         .run_with(App::new)
 }
 
-#[derive(Debug)]
-enum App {
-    Loading,
-    Unauthed(LoginScreen),
-    Authed,
-    Loaded(State),
-    EditEntry(EditTimeEntry),
-}
-
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct State {
     api_token: String,
     time_entries: Vec<TimeEntry>,
+    running_entry: Option<TimeEntry>,
+    projects: Vec<Project>,
+    workspaces: Vec<Workspace>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
+struct TemporaryState {
+    new_running_entry_description: String,
+}
+
+#[derive(Debug, Default)]
+struct App {
+    state: State,
+    screen: Screen,
+    window_id: Option<window::Id>,
+}
+
+#[derive(Debug, Default)]
+enum Screen {
+    #[default]
+    Loading,
+    Unauthed(LoginScreen),
+    Authed,
+    Loaded(TemporaryState),
+    EditEntry(EditTimeEntry),
+}
+
+#[derive(Debug, Clone)]
 enum Message {
-    Loaded(Result<SavedState, LoadError>),
-    DataFetched(NetResult<State>),
+    Loaded(Result<State, LoadError>),
+    DataFetched(Result<State, String>),
     LoginProxy(LoginScreenMessage),
     TimeEntryProxy(TimeEntryMessage),
     EditTimeEntryProxy(EditTimeEntryMessage),
+    SetInitialRunningEntry(String),
+    SubmitNewRunningEntry,
+    Tick,
+    Reload,
     Discarded,
+    WindowIdReceived(Option<window::Id>),
+}
+
+lazy_static! {
+    static ref RUNNING_ICON: window::Icon = window::icon::from_file_data(
+        include_bytes!("../assets/icon.png"),
+        None
+    )
+    .expect("Icon must parse");
+    static ref DEFAULT_ICON: window::Icon = window::icon::from_file_data(
+        include_bytes!("../assets/icon-gray.png"),
+        None
+    )
+    .expect("Icon must parse");
 }
 
 impl App {
     fn new() -> (Self, Command<Message>) {
         (
-            Self::Loading,
-            Command::perform(SavedState::load(), Message::Loaded),
+            Self {
+                state: State::default(),
+                screen: Screen::Loading,
+                window_id: None,
+            },
+            Command::batch(vec![
+                Command::perform(State::load(), Message::Loaded),
+                iced::window::get_latest().map(Message::WindowIdReceived),
+            ]),
         )
     }
 
     fn title(&self) -> String {
-        "Toggl Tracker".to_string()
+        if self.state.running_entry.is_some() {
+            "* Toggl Tracker".to_string()
+        } else {
+            "Toggl Tracker".to_string()
+        }
+    }
+
+    fn icon(&self) -> window::Icon {
+        if self.state.running_entry.is_some() {
+            RUNNING_ICON.clone()
+        } else {
+            DEFAULT_ICON.clone()
+        }
+    }
+
+    fn update_icon(&self) -> Command<Message> {
+        if let Some(id) = self.window_id {
+            window::change_icon(id, self.icon())
+        } else {
+            Command::none()
+        }
     }
 
     fn update(&mut self, message: Message) -> Command<Message> {
-        match self {
-            Self::Loading => match message {
+        if let Message::WindowIdReceived(id) = message {
+            self.window_id = id;
+            if let Some(id) = id {
+                return window::change_icon(id, self.icon());
+            };
+        };
+
+        match &mut self.screen {
+            Screen::Loading => match message {
                 Message::Loaded(Ok(state)) => {
-                    *self = Self::Authed;
-                    Command::future(Self::load_everything(state.api_token))
+                    self.screen = Screen::Authed;
+                    return Command::future(Self::load_everything(
+                        state.api_token,
+                    ));
                 }
                 Message::Loaded(_) => {
-                    *self = Self::Unauthed(LoginScreen::new());
-                    Command::none()
+                    self.screen = Screen::Unauthed(LoginScreen::new());
                 }
-                _ => Command::none(),
+                _ => {}
             },
-            Self::Unauthed(screen) => match message {
+            Screen::Unauthed(screen) => match message {
                 Message::LoginProxy(LoginScreenMessage::Completed(Ok(
                     api_token,
                 ))) => {
-                    *self = Self::Authed;
-                    Command::batch(vec![
+                    self.screen = Screen::Authed;
+                    return Command::batch(vec![
                         Command::future(
-                            SavedState {
+                            State {
                                 api_token: api_token.clone(),
+                                ..State::default()
                             }
                             .save(),
                         )
                         .map(|_| Message::Discarded),
                         Command::future(Self::load_everything(api_token)),
-                    ])
+                    ]);
                 }
                 Message::LoginProxy(msg) => {
-                    screen.update(msg).map(Message::LoginProxy)
+                    return screen.update(msg).map(Message::LoginProxy)
                 }
-                _ => Command::none(),
+                _ => {}
             },
-            Self::Authed => match message {
+            Screen::Authed => {
+                if let Message::DataFetched(Ok(state)) = message {
+                    self.screen = Screen::Loaded(TemporaryState::default());
+                    self.state = state;
+                    return self.update_icon();
+                }
+            }
+            Screen::Loaded(temp_state) => match message {
                 Message::DataFetched(Ok(state)) => {
-                    *self = Self::Loaded(state);
-                    Command::none()
+                    self.state = state;
+                    return self.update_icon();
                 }
-                _ => Command::none(),
-            },
-            Self::Loaded(state) => match message {
                 Message::TimeEntryProxy(TimeEntryMessage::Edit(i)) => {
-                    *self = Self::EditEntry(EditTimeEntry::new(
-                        state.time_entries[i].clone(),
-                        &state.api_token,
+                    self.screen = Screen::EditEntry(EditTimeEntry::new(
+                        self.state.time_entries[i].clone(),
+                        &self.state.api_token,
                     ));
-                    Command::none()
                 }
-                _ => Command::none(),
+                Message::TimeEntryProxy(TimeEntryMessage::EditRunning) => {
+                    if let Some(entry) = &self.state.running_entry {
+                        self.screen = Screen::EditEntry(EditTimeEntry::new(
+                            entry.clone(),
+                            &self.state.api_token,
+                        ));
+                    }
+                }
+                Message::TimeEntryProxy(TimeEntryMessage::StopRunning) => {
+                    if let Some(entry) = self.state.running_entry.clone() {
+                        let token = self.state.api_token.clone();
+                        return Command::future(async move {
+                            let client = Client::from_api_token(&token);
+                            match entry.stop(&client).await {
+                                // FIXME: display error
+                                Err(e) => {
+                                    eprintln!("Stop failed: {e}");
+                                    Message::Reload
+                                }
+                                Ok(_) => Message::Reload,
+                            }
+                        });
+                    }
+                }
+                Message::SetInitialRunningEntry(description) => {
+                    temp_state.new_running_entry_description = description;
+                }
+                Message::SubmitNewRunningEntry => {
+                    let token = self.state.api_token.clone();
+                    let description =
+                        temp_state.new_running_entry_description.clone();
+                    let workspace_id = if self.state.workspaces.is_empty() {
+                        eprintln!("No known workspaces");
+                        0
+                    } else {
+                        self.state.workspaces[0].id
+                    };
+                    return Command::future(async move {
+                        let client = Client::from_api_token(&token);
+                        let entry =
+                            CreateTimeEntry::new(description, workspace_id);
+                        match entry.create(&client).await {
+                            // FIXME: display error
+                            Err(e) => {
+                                eprintln!("Submit failed: {e}");
+                                Message::Reload
+                            }
+                            Ok(_) => Message::Reload,
+                        }
+                    });
+                }
+                Message::Reload => {
+                    *temp_state = TemporaryState::default();
+                    return Command::future(Self::load_everything(
+                        self.state.api_token.clone(),
+                    ));
+                }
+                _ => {}
             },
-            Self::EditEntry(screen) => match message {
+            Screen::EditEntry(screen) => match message {
                 Message::EditTimeEntryProxy(
                     EditTimeEntryMessage::Completed,
                 ) => {
-                    *self = Self::Loading;
-                    Command::perform(SavedState::load(), Message::Loaded)
+                    self.screen = Screen::Loading;
+                    return Command::perform(State::load(), Message::Loaded);
                 }
                 Message::EditTimeEntryProxy(msg) => {
-                    screen.update(msg).map(Message::EditTimeEntryProxy)
+                    return screen.update(msg).map(Message::EditTimeEntryProxy)
                 }
-                _ => Command::none(),
+                _ => {}
             },
-        }
+        };
+        Command::none()
     }
 
     fn view(&self) -> Element<Message> {
-        match self {
-            App::Loading => loading_message(),
-            App::Authed => loading_message(),
-            App::Unauthed(screen) => screen.view().map(Message::LoginProxy),
-            App::Loaded(State { time_entries, .. }) => {
-                let content =
-                    column(time_entries.iter().enumerate().map(|(i, task)| {
-                        task.view(i).map(Message::TimeEntryProxy)
-                    }))
-                    .spacing(10);
+        match &self.screen {
+            Screen::Loading => loading_message(),
+            Screen::Authed => loading_message(),
+            Screen::Unauthed(screen) => screen.view().map(Message::LoginProxy),
+            Screen::Loaded(temp_state) => {
+                let running_entry = match &self.state.running_entry {
+                    None => row![text_input(
+                        "Create new entry...",
+                        &temp_state.new_running_entry_description
+                    )
+                    .id("running-entry-input")
+                    .on_input(Message::SetInitialRunningEntry)
+                    .on_submit(Message::SubmitNewRunningEntry)],
+                    Some(entry) => {
+                        row![entry.view_running().map(Message::TimeEntryProxy)]
+                    }
+                };
+                let content = column(
+                    self.state
+                        .time_entries
+                        .iter()
+                        .chunk_by(|e| e.start.date())
+                        .into_iter()
+                        .map(|(start, tasks)| {
+                            column(
+                                std::iter::once(
+                                    container(
+                                        text(date_as_human_readable(start))
+                                            .style(text::success),
+                                    )
+                                    .padding(Padding {
+                                        left: 10f32,
+                                        ..Padding::default()
+                                    })
+                                    .into(),
+                                )
+                                .chain(
+                                    tasks.enumerate().flat_map(|(i, task)| {
+                                        vec![
+                                            task.view(i)
+                                                .map(Message::TimeEntryProxy),
+                                            horizontal_rule(0.5).into(),
+                                        ]
+                                    }),
+                                ),
+                            )
+                            .into()
+                        }),
+                )
+                .spacing(10);
 
-                scrollable(container(content).center_x(Fill).padding(40)).into()
+                container(
+                    column![running_entry, scrollable(content)].spacing(20),
+                )
+                .center_x(Fill)
+                .into()
             }
-            App::EditEntry(screen) => {
+            Screen::EditEntry(screen) => {
                 screen.view().map(Message::EditTimeEntryProxy)
             }
         }
@@ -147,49 +335,56 @@ impl App {
 
     async fn load_everything(api_token: String) -> Message {
         let client = Client::from_api_token(&api_token);
-        TimeEntry::load(&client)
+        ExtendedMe::load(&client)
             .await
-            .map(|time_entries| {
-                Message::DataFetched(NetResult::Ok(State {
-                    time_entries,
-                    api_token,
-                }))
-            })
-            .unwrap_or_else(|e| Message::DataFetched(NetResult::Err(e)))
+            .map(
+                |ExtendedMe {
+                     api_token,
+                     projects,
+                     workspaces,
+                     time_entries,
+                 }| {
+                    let (running_entry, time_entries) =
+                        TimeEntry::split_running(time_entries);
+                    Message::DataFetched(Ok(State {
+                        time_entries,
+                        running_entry,
+                        api_token,
+                        projects,
+                        workspaces,
+                    }))
+                },
+            )
+            .unwrap_or_else(|e| Message::DataFetched(Err(e.to_string())))
     }
 
-    // fn subscription(&self) -> Subscription<Message> {
-    //     use keyboard::key;
+    fn subscription(&self) -> iced::Subscription<Message> {
+        iced::time::every(std::time::Duration::from_secs(1))
+            .map(|_| Message::Tick)
+        // use keyboard::key;
+        // keyboard::on_key_press(|key, modifiers| {
+        //     let keyboard::Key::Named(key) = key else {
+        //         return None;
+        //     };
 
-    //     keyboard::on_key_press(|key, modifiers| {
-    //         let keyboard::Key::Named(key) = key else {
-    //             return None;
-    //         };
-
-    //         match (key, modifiers) {
-    //             (key::Named::Tab, _) => Some(Message::TabPressed {
-    //                 shift: modifiers.shift(),
-    //             }),
-    //             (key::Named::ArrowUp, keyboard::Modifiers::SHIFT) => {
-    //                 Some(Message::ToggleFullscreen(window::Mode::Fullscreen))
-    //             }
-    //             (key::Named::ArrowDown, keyboard::Modifiers::SHIFT) => {
-    //                 Some(Message::ToggleFullscreen(window::Mode::Windowed))
-    //             }
-    //             _ => None,
-    //         }
-    //     })
-    // }
+        //     match (key, modifiers) {
+        //         (key::Named::Tab, _) => Some(Message::TabPressed {
+        //             shift: modifiers.shift(),
+        //         }),
+        //         (key::Named::ArrowUp, keyboard::Modifiers::SHIFT) => {
+        //             Some(Message::ToggleFullscreen(window::Mode::Fullscreen))
+        //         }
+        //         (key::Named::ArrowDown, keyboard::Modifiers::SHIFT) => {
+        //             Some(Message::ToggleFullscreen(window::Mode::Windowed))
+        //         }
+        //         _ => None,
+        //     }
+        // })
+    }
 }
 
 fn loading_message<'a>() -> Element<'a, Message> {
     center(text("Loading...").width(Fill).align_x(Center).size(50)).into()
-}
-
-// Persistence
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct SavedState {
-    api_token: String,
 }
 
 #[derive(Debug, Clone)]
@@ -205,7 +400,7 @@ enum SaveError {
     Format,
 }
 
-impl SavedState {
+impl State {
     fn path() -> std::path::PathBuf {
         let mut path = if let Some(project_dirs) =
             directories_next::ProjectDirs::from("rs", "Iced", "toggl-tracker")
@@ -219,7 +414,7 @@ impl SavedState {
         path
     }
 
-    async fn load() -> Result<SavedState, LoadError> {
+    async fn load() -> Result<State, LoadError> {
         use async_std::prelude::*;
 
         let mut contents = String::new();
