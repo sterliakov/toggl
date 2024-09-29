@@ -4,8 +4,8 @@ use iced::widget::{
 use iced::{Element, Fill, Length, Right, Task as Command};
 
 use crate::client::Client;
+use crate::customization::Customization;
 use crate::time_entry::TimeEntry;
-use crate::utils::{datetime_as_human_readable, datetime_from_human_readable};
 
 #[derive(Debug)]
 pub struct EditTimeEntry {
@@ -29,10 +29,14 @@ pub enum EditTimeEntryMessage {
 }
 
 impl EditTimeEntry {
-    pub fn new(entry: TimeEntry, api_token: &str) -> Self {
+    pub fn new(
+        entry: TimeEntry,
+        api_token: &str,
+        customization: &Customization,
+    ) -> Self {
         let description = entry.description.clone();
-        let start_text = datetime_as_human_readable(&Some(entry.start));
-        let stop_text = datetime_as_human_readable(&entry.stop);
+        let start_text = customization.format_datetime(&Some(entry.start));
+        let stop_text = customization.format_datetime(&entry.stop);
         Self {
             entry,
             api_token: api_token.to_string(),
@@ -84,6 +88,7 @@ impl EditTimeEntry {
     pub fn update(
         &mut self,
         message: EditTimeEntryMessage,
+        customization: &Customization,
     ) -> Command<EditTimeEntryMessage> {
         match message {
             EditTimeEntryMessage::DescriptionEdited(action) => {
@@ -97,26 +102,26 @@ impl EditTimeEntry {
                 self.stop_text = stop;
             }
             EditTimeEntryMessage::Submit => {
-                {
-                    let Ok(maybe_date) = datetime_from_human_readable(
-                        &self.start_text,
-                        &self.entry.start,
-                    ) else {
+                match customization.parse_datetime(
+                    &self.start_text,
+                    *self.entry.start.fixed_offset().offset(),
+                ) {
+                    Err(_) => {
                         return Command::done(EditTimeEntryMessage::Error(
                             format!("Invalid start date: {}", self.start_text),
-                        ));
-                    };
-                    let Some(date) = maybe_date else {
+                        ))
+                    }
+                    Ok(None) => {
                         return Command::done(EditTimeEntryMessage::Error(
                             "Start cannot be blank".to_string(),
-                        ));
-                    };
-                    self.entry.start = date;
-                }
+                        ))
+                    }
+                    Ok(Some(date)) => self.entry.start = date,
+                };
                 {
-                    let Ok(date) = datetime_from_human_readable(
+                    let Ok(date) = customization.parse_datetime(
                         &self.stop_text,
-                        &self.entry.start,
+                        *self.entry.start.fixed_offset().offset(),
                     ) else {
                         return Command::done(EditTimeEntryMessage::Error(
                             format!("Invalid end date: {}", self.stop_text),
@@ -127,7 +132,7 @@ impl EditTimeEntry {
                 self.entry.duration = self
                     .entry
                     .stop
-                    .map(|stop| (stop - self.entry.start).whole_seconds())
+                    .map(|stop| (stop - self.entry.start).num_seconds())
                     .unwrap_or(-1);
                 return Command::future(Self::submit(
                     self.entry.clone(),

@@ -16,14 +16,14 @@ pub struct ExtendedMe {
 
 impl ExtendedMe {
     pub async fn load(client: &Client) -> NetResult<Self> {
-        client
+        let mut rsp = client
             .get(
                 [Client::BASE_URL, "/api/v9/me?with_related_data=true"]
                     .join(""),
             )
             .send()
-            .await?
-            .body_json()
-            .await
+            .await?;
+        Client::check_status(&mut rsp).await?;
+        rsp.body_json().await
     }
 }

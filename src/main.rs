@@ -1,3 +1,5 @@
+use components::menu_button;
+use customization::{Customization, CustomizationMessage};
 use iced::widget::{
     button, center, column, container, horizontal_rule, row, scrollable, text,
     text_input,
@@ -11,12 +13,13 @@ use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
 mod client;
+mod components;
+mod customization;
 mod edit_time_entry;
 mod login;
 mod project;
 mod related_info;
 mod time_entry;
-mod utils;
 mod workspace;
 
 use crate::client::Client;
@@ -26,7 +29,6 @@ use crate::project::Project;
 use crate::related_info::ExtendedMe;
 use crate::time_entry::CreateTimeEntry;
 use crate::time_entry::{TimeEntry, TimeEntryMessage};
-use crate::utils::date_as_human_readable;
 use crate::workspace::Workspace;
 
 pub fn main() -> iced::Result {
@@ -45,6 +47,7 @@ struct State {
     workspaces: Vec<Workspace>,
     default_workspace: Option<u64>,
     default_project: Option<u64>,
+    customization: Customization,
 }
 
 impl State {
@@ -101,6 +104,7 @@ enum Message {
     LoginProxy(LoginScreenMessage),
     TimeEntryProxy(TimeEntryMessage),
     EditTimeEntryProxy(EditTimeEntryMessage),
+    CustomizationProxy(CustomizationMessage),
     SetInitialRunningEntry(String),
     SubmitNewRunningEntry,
     Tick,
@@ -209,17 +213,15 @@ impl App {
                     api_token,
                 ))) => {
                     self.screen = Screen::Authed;
-                    return Command::batch(vec![
-                        Command::future(
-                            State {
-                                api_token: api_token.clone(),
-                                ..State::default()
-                            }
-                            .save(),
-                        )
-                        .map(|_| Message::Discarded),
-                        Command::future(Self::load_everything(api_token)),
-                    ]);
+                    self.state = State {
+                        api_token: api_token.clone(),
+                        ..State::default()
+                    };
+                    return Command::future(self.state.clone().save())
+                        .map(|_| Message::Discarded)
+                        .chain(Command::future(Self::load_everything(
+                            api_token,
+                        )));
                 }
                 Message::LoginProxy(msg) => {
                     return screen.update(msg).map(Message::LoginProxy)
@@ -232,6 +234,7 @@ impl App {
                     self.screen = Screen::EditEntry(EditTimeEntry::new(
                         self.state.time_entries[i].clone(),
                         &self.state.api_token,
+                        &self.state.customization,
                     ));
                 }
                 Message::TimeEntryProxy(TimeEntryMessage::EditRunning) => {
@@ -239,6 +242,7 @@ impl App {
                         self.screen = Screen::EditEntry(EditTimeEntry::new(
                             entry.clone(),
                             &self.state.api_token,
+                            &self.state.customization,
                         ));
                     }
                 }
@@ -276,6 +280,9 @@ impl App {
                             Ok(_) => Message::Reload,
                         }
                     });
+                }
+                Message::CustomizationProxy(msg) => {
+                    self.state.customization.update(msg)
                 }
                 Message::SetInitialRunningEntry(description) => {
                     temp_state.new_running_entry_description = description;
@@ -335,7 +342,9 @@ impl App {
                     return Command::perform(State::load(), Message::Loaded);
                 }
                 Message::EditTimeEntryProxy(msg) => {
-                    return screen.update(msg).map(Message::EditTimeEntryProxy)
+                    return screen
+                        .update(msg, &self.state.customization)
+                        .map(Message::EditTimeEntryProxy)
                 }
                 _ => {}
             },
@@ -361,7 +370,7 @@ impl App {
                     self.state
                         .time_entries
                         .iter()
-                        .chunk_by(|e| e.start.date())
+                        .chunk_by(|e| e.start.date_naive())
                         .into_iter()
                         .map(|(start, tasks)| self.day_group(start, tasks)),
                 );
@@ -389,7 +398,7 @@ impl App {
         }
     }
 
-    fn menu<'a>(&self) -> Element<'a, Message> {
+    fn menu(&self) -> Element<Message> {
         let selected_ws = self.state.default_workspace.unwrap_or(0);
         let ws_menu = menu::Menu::new(
             self.state
@@ -438,46 +447,38 @@ impl App {
         )
         .max_width(200.0);
 
-        menu::MenuBar::new(vec![menu::Item::with_menu(
-            Self::menu_button("Info", Message::Discarded)
-                .width(iced::Length::Fixed(80f32)),
-            menu::Menu::new(vec![
-                menu::Item::new(Self::menu_button("Reload", Message::Reload)),
-                menu::Item::with_menu(
-                    Self::menu_button("Workspaces", Message::Discarded),
-                    ws_menu,
-                ),
-                menu::Item::with_menu(
-                    Self::menu_button("Projects", Message::Discarded),
-                    project_menu,
-                ),
-            ])
-            .max_width(120.0),
-        )])
+        menu::MenuBar::new(vec![
+            menu::Item::with_menu(
+                menu_button("Info", Message::Discarded)
+                    .width(iced::Length::Fixed(50f32)),
+                menu::Menu::new(vec![
+                    menu::Item::new(menu_button("Reload", Message::Reload)),
+                    menu::Item::with_menu(
+                        menu_button("Workspaces", Message::Discarded),
+                        ws_menu,
+                    ),
+                    menu::Item::with_menu(
+                        menu_button("Projects", Message::Discarded),
+                        project_menu,
+                    ),
+                ])
+                .max_width(120.0),
+            ),
+            self.state.customization.view(&Message::CustomizationProxy),
+        ])
         .into()
-    }
-    fn menu_button(
-        content: &str,
-        message: Message,
-    ) -> button::Button<'_, Message, iced::Theme, iced::Renderer> {
-        button(content)
-            .style(|_, _| button::Style {
-                background: None,
-                ..button::Style::default()
-            })
-            .on_press(message)
-            .width(iced::Length::Fill)
     }
 
     fn day_group<'a>(
         &self,
-        start: time::Date,
+        start: chrono::NaiveDate,
         tasks: impl Iterator<Item = &'a TimeEntry>,
     ) -> Element<'a, Message> {
         column(
             std::iter::once(
                 container(
-                    text(date_as_human_readable(start)).style(text::success),
+                    text(self.state.customization.format_date(&start))
+                        .style(text::success),
                 )
                 .padding(Padding {
                     left: 10f32,
@@ -599,6 +600,7 @@ impl State {
 
     async fn save(self) -> Result<(), SaveError> {
         use async_std::prelude::*;
+        println!("Saving with token: {}", self.api_token);
 
         let json = serde_json::to_string_pretty(&self)
             .map_err(|_| SaveError::Format)?;

@@ -1,11 +1,9 @@
-use core::str;
-
+use chrono::{DateTime, Duration, Local};
 use iced::alignment::Vertical;
 use iced::widget::{button, column, container, row, text};
 use iced::{Color, Element, Length};
 use iced_aw::badge;
 use serde::{Deserialize, Serialize};
-use time::{Duration, OffsetDateTime};
 
 use crate::client::{Client, Result};
 use crate::project::Project;
@@ -19,12 +17,9 @@ pub struct TimeEntry {
     pub id: u64,
     pub permissions: Option<Vec<String>>,
     pub project_id: Option<u64>,
-    #[serde(with = "time::serde::rfc3339")]
-    pub start: OffsetDateTime,
-    #[serde(with = "time::serde::rfc3339::option")]
-    pub stop: Option<OffsetDateTime>,
-    #[serde(with = "time::serde::rfc3339::option")]
-    pub server_deleted_at: Option<OffsetDateTime>,
+    pub start: DateTime<Local>,
+    pub stop: Option<DateTime<Local>>,
+    pub server_deleted_at: Option<DateTime<Local>>,
     pub tag_ids: Vec<u64>,
     pub tags: Vec<String>,
     pub task_id: Option<u64>,
@@ -43,7 +38,23 @@ impl TimeEntry {
     //     Ok(Self::split_running(all_entries))
     // }
 
+    pub fn into_local_timezone(self) -> Self {
+        let offset = Local::now().timezone();
+        Self {
+            start: self.start.with_timezone(&offset),
+            stop: self.stop.map(|d| d.with_timezone(&offset)),
+            server_deleted_at: self
+                .server_deleted_at
+                .map(|d| d.with_timezone(&offset)),
+            ..self
+        }
+    }
+
     pub fn split_running(all_entries: Vec<Self>) -> (Option<Self>, Vec<Self>) {
+        let all_entries: Vec<_> = all_entries
+            .into_iter()
+            .map(|e| e.into_local_timezone())
+            .collect();
         match &all_entries[..] {
             [] => (None, vec![]),
             [head, rest @ ..] => {
@@ -110,9 +121,10 @@ impl TimeEntry {
     }
 
     fn duration_string(&self) -> String {
-        let diff = self.stop.unwrap_or(
-            OffsetDateTime::now_utc().to_offset(self.start.offset()),
-        ) - self.start;
+        let diff = self
+            .stop
+            .unwrap_or(Local::now().with_timezone(&self.start.timezone()))
+            - self.start;
         duration_to_hms(&diff)
     }
 }
@@ -122,8 +134,7 @@ pub struct CreateTimeEntry {
     created_with: String,
     description: Option<String>,
     duration: i64,
-    #[serde(with = "time::serde::rfc3339")]
-    start: OffsetDateTime,
+    start: DateTime<Local>,
     workspace_id: u64,
     project_id: Option<u64>,
 }
@@ -138,7 +149,7 @@ impl CreateTimeEntry {
             created_with: "ST-Toggl-Client".to_string(),
             description,
             duration: -1,
-            start: OffsetDateTime::now_utc(),
+            start: Local::now(),
             workspace_id,
             project_id,
         }
@@ -262,7 +273,7 @@ impl TimeEntry {
 }
 
 fn duration_to_hms(duration: &Duration) -> String {
-    let total_seconds = duration.as_seconds_f32().floor() as i32;
+    let total_seconds = duration.num_seconds();
     let seconds = total_seconds % 60;
     let minutes = (total_seconds / 60) % 60;
     let hours = (total_seconds / 60) / 60;
