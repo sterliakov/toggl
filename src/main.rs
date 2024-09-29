@@ -1,9 +1,10 @@
 use iced::widget::{
-    center, column, container, horizontal_rule, row, scrollable, text,
+    button, center, column, container, horizontal_rule, row, scrollable, text,
     text_input,
 };
-use iced::window;
+use iced::{window, Color};
 use iced::{Center, Element, Fill, Padding, Task as Command};
+use iced_aw::menu;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 
@@ -42,6 +43,33 @@ struct State {
     running_entry: Option<TimeEntry>,
     projects: Vec<Project>,
     workspaces: Vec<Workspace>,
+    default_workspace: Option<u64>,
+    default_project: Option<u64>,
+}
+
+impl State {
+    pub fn update_from_context(self, me: ExtendedMe) -> Self {
+        let first_id = me.workspaces.first().map(|ws| ws.id);
+        let ws_id = self.default_workspace.or(first_id);
+        let (running_entry, time_entries) =
+            TimeEntry::split_running(if let Some(ws_id) = ws_id {
+                me.time_entries
+                    .into_iter()
+                    .filter(|e| e.workspace_id == ws_id)
+                    .collect()
+            } else {
+                me.time_entries
+            });
+        // FIXME: this may produce inconsistent state if a workspace/project was deleted.
+        Self {
+            running_entry,
+            time_entries,
+            projects: me.projects,
+            workspaces: me.workspaces,
+            default_workspace: ws_id,
+            ..self
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -68,8 +96,8 @@ enum Screen {
 
 #[derive(Debug, Clone)]
 enum Message {
-    Loaded(Result<State, LoadError>),
-    DataFetched(Result<State, String>),
+    Loaded(Result<Box<State>, LoadError>),
+    DataFetched(Result<ExtendedMe, String>),
     LoginProxy(LoginScreenMessage),
     TimeEntryProxy(TimeEntryMessage),
     EditTimeEntryProxy(EditTimeEntryMessage),
@@ -79,6 +107,8 @@ enum Message {
     Reload,
     Discarded,
     WindowIdReceived(Option<window::Id>),
+    SelectWorkspace(u64),
+    SelectProject(Option<u64>),
 }
 
 lazy_static! {
@@ -134,20 +164,40 @@ impl App {
     }
 
     fn update(&mut self, message: Message) -> Command<Message> {
-        if let Message::WindowIdReceived(id) = message {
-            self.window_id = id;
-            if let Some(id) = id {
-                return window::change_icon(id, self.icon());
-            };
+        match message {
+            Message::WindowIdReceived(id) => {
+                self.window_id = id;
+                if let Some(id) = id {
+                    return window::change_icon(id, self.icon());
+                };
+            }
+            Message::DataFetched(Ok(state)) => {
+                match &self.screen {
+                    Screen::Loaded(_) => {}
+                    _ => {
+                        self.screen = Screen::Loaded(TemporaryState::default())
+                    }
+                };
+                self.state = self.state.clone().update_from_context(state);
+                return Command::batch(vec![
+                    Command::future(self.state.clone().save())
+                        .map(|_| Message::Discarded),
+                    self.update_icon(),
+                ]);
+            }
+            Message::DataFetched(Err(ref e)) => {
+                eprintln!("Data fetch failed: {e}");
+            }
+            _ => {}
         };
 
         match &mut self.screen {
             Screen::Loading => match message {
                 Message::Loaded(Ok(state)) => {
                     self.screen = Screen::Authed;
-                    return Command::future(Self::load_everything(
-                        state.api_token,
-                    ));
+                    let api_token = state.api_token.clone();
+                    self.state = *state;
+                    return Command::future(Self::load_everything(api_token));
                 }
                 Message::Loaded(_) => {
                     self.screen = Screen::Unauthed(LoginScreen::new());
@@ -176,18 +226,8 @@ impl App {
                 }
                 _ => {}
             },
-            Screen::Authed => {
-                if let Message::DataFetched(Ok(state)) = message {
-                    self.screen = Screen::Loaded(TemporaryState::default());
-                    self.state = state;
-                    return self.update_icon();
-                }
-            }
+            Screen::Authed => {}
             Screen::Loaded(temp_state) => match message {
-                Message::DataFetched(Ok(state)) => {
-                    self.state = state;
-                    return self.update_icon();
-                }
                 Message::TimeEntryProxy(TimeEntryMessage::Edit(i)) => {
                     self.screen = Screen::EditEntry(EditTimeEntry::new(
                         self.state.time_entries[i].clone(),
@@ -225,16 +265,19 @@ impl App {
                     let token = self.state.api_token.clone();
                     let description =
                         temp_state.new_running_entry_description.clone();
-                    let workspace_id = if self.state.workspaces.is_empty() {
-                        eprintln!("No known workspaces");
-                        0
-                    } else {
-                        self.state.workspaces[0].id
-                    };
+                    // FIXME: ensure this by some other means
+                    let workspace_id = self
+                        .state
+                        .default_workspace
+                        .expect("Workspace must exist");
+                    let project_id = self.state.default_project;
                     return Command::future(async move {
                         let client = Client::from_api_token(&token);
-                        let entry =
-                            CreateTimeEntry::new(description, workspace_id);
+                        let entry = CreateTimeEntry::new(
+                            description,
+                            workspace_id,
+                            project_id,
+                        );
                         match entry.create(&client).await {
                             // FIXME: display error
                             Err(e) => {
@@ -250,6 +293,18 @@ impl App {
                     return Command::future(Self::load_everything(
                         self.state.api_token.clone(),
                     ));
+                }
+                Message::SelectWorkspace(ws_id) => {
+                    self.state.default_workspace = Some(ws_id);
+                    return Command::future(Self::load_everything(
+                        self.state.api_token.clone(),
+                    ));
+                }
+                Message::SelectProject(project_id) => {
+                    self.state.default_project = project_id;
+                    return Command::perform(self.state.clone().save(), |_| {
+                        Message::Discarded
+                    });
                 }
                 _ => {}
             },
@@ -281,6 +336,14 @@ impl App {
                         &temp_state.new_running_entry_description
                     )
                     .id("running-entry-input")
+                    .style(|_, _| text_input::Style {
+                        background: iced::color!(0x161616).into(),
+                        border: iced::Border::default(),
+                        icon: Color::WHITE,
+                        placeholder: iced::color!(0xd8d8d8),
+                        value: Color::WHITE,
+                        selection: Color::WHITE,
+                    })
                     .on_input(Message::SetInitialRunningEntry)
                     .on_submit(Message::SubmitNewRunningEntry)],
                     Some(entry) => {
@@ -304,12 +367,19 @@ impl App {
                                         left: 10f32,
                                         ..Padding::default()
                                     })
+                                    .style(|_| container::Style {
+                                        background: Some(
+                                            iced::color!(0xc8c8c8).into(),
+                                        ),
+                                        ..container::Style::default()
+                                    })
+                                    .width(iced::Length::Fill)
                                     .into(),
                                 )
                                 .chain(
                                     tasks.enumerate().flat_map(|(i, task)| {
                                         vec![
-                                            task.view(i)
+                                            task.view(i, &self.state.projects)
                                                 .map(Message::TimeEntryProxy),
                                             horizontal_rule(0.5).into(),
                                         ]
@@ -318,12 +388,22 @@ impl App {
                             )
                             .into()
                         }),
-                )
-                .spacing(10);
+                );
 
-                container(
-                    column![running_entry, scrollable(content)].spacing(20),
-                )
+                container(column![
+                    self.menu(),
+                    running_entry,
+                    container(scrollable(content)).style(|_| {
+                        container::Style {
+                            border: iced::Border {
+                                color: iced::color!(0x0000cd),
+                                width: 0.5,
+                                radius: 0.into(),
+                            },
+                            ..container::Style::default()
+                        }
+                    })
+                ])
                 .center_x(Fill)
                 .into()
             }
@@ -333,28 +413,91 @@ impl App {
         }
     }
 
+    fn menu<'a>(&self) -> Element<'a, Message> {
+        let selected_ws = self.state.default_workspace.unwrap_or(0);
+        let ws_menu = menu::Menu::new(
+            self.state
+                .workspaces
+                .iter()
+                .map(|ws| {
+                    menu::Item::new(
+                        button(text(ws.name.clone()))
+                            .width(iced::Length::Fill)
+                            .on_press_maybe(if selected_ws == ws.id {
+                                None
+                            } else {
+                                Some(Message::SelectWorkspace(ws.id))
+                            }),
+                    )
+                })
+                .collect(),
+        )
+        .max_width(200.0);
+
+        let selected_project = self.state.default_project;
+        let project_menu = menu::Menu::new(
+            std::iter::once(
+                menu::Item::<Message, iced::Theme, iced::Renderer>::new(
+                    button("None").width(iced::Length::Fill).on_press_maybe(
+                        if selected_project.is_none() {
+                            None
+                        } else {
+                            Some(Message::SelectProject(None))
+                        },
+                    ),
+                ),
+            )
+            .chain(self.state.projects.iter().map(|p| {
+                menu::Item::new(
+                    button(text(p.name.clone()))
+                        .width(iced::Length::Fill)
+                        .on_press_maybe(if selected_project == Some(p.id) {
+                            None
+                        } else {
+                            Some(Message::SelectProject(Some(p.id)))
+                        }),
+                )
+            }))
+            .collect(),
+        )
+        .max_width(200.0);
+
+        menu::MenuBar::new(vec![menu::Item::with_menu(
+            Self::menu_button("Info", Message::Discarded)
+                .width(iced::Length::Fixed(80f32)),
+            menu::Menu::new(vec![
+                menu::Item::new(Self::menu_button("Reload", Message::Reload)),
+                menu::Item::with_menu(
+                    Self::menu_button("Workspaces", Message::Discarded),
+                    ws_menu,
+                ),
+                menu::Item::with_menu(
+                    Self::menu_button("Projects", Message::Discarded),
+                    project_menu,
+                ),
+            ])
+            .max_width(120.0),
+        )])
+        .into()
+    }
+    fn menu_button(
+        content: &str,
+        message: Message,
+    ) -> button::Button<'_, Message, iced::Theme, iced::Renderer> {
+        button(content)
+            .style(|_, _| button::Style {
+                background: None,
+                ..button::Style::default()
+            })
+            .on_press(message)
+            .width(iced::Length::Fill)
+    }
+
     async fn load_everything(api_token: String) -> Message {
         let client = Client::from_api_token(&api_token);
         ExtendedMe::load(&client)
             .await
-            .map(
-                |ExtendedMe {
-                     api_token,
-                     projects,
-                     workspaces,
-                     time_entries,
-                 }| {
-                    let (running_entry, time_entries) =
-                        TimeEntry::split_running(time_entries);
-                    Message::DataFetched(Ok(State {
-                        time_entries,
-                        running_entry,
-                        api_token,
-                        projects,
-                        workspaces,
-                    }))
-                },
-            )
+            .map(|m| Message::DataFetched(Ok(m)))
             .unwrap_or_else(|e| Message::DataFetched(Err(e.to_string())))
     }
 
@@ -414,7 +557,7 @@ impl State {
         path
     }
 
-    async fn load() -> Result<State, LoadError> {
+    async fn load() -> Result<Box<Self>, LoadError> {
         use async_std::prelude::*;
 
         let mut contents = String::new();

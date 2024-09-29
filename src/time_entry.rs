@@ -1,12 +1,14 @@
 use core::str;
 
 use iced::alignment::Vertical;
-use iced::widget::{button, container, row, text};
+use iced::widget::{button, column, container, row, text};
 use iced::{Color, Element, Length};
+use iced_aw::badge;
 use serde::{Deserialize, Serialize};
 use time::{Duration, OffsetDateTime};
 
 use crate::client::{Client, Result};
+use crate::project::Project;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TimeEntry {
@@ -58,8 +60,8 @@ impl TimeEntry {
         let mut res = client
             .put(
                 [
-                    Client::BASE_URL.to_string(),
-                    format!(
+                    Client::BASE_URL,
+                    &format!(
                         "/api/v9/workspaces/{}/time_entries/{}",
                         self.workspace_id, self.id
                     ),
@@ -77,8 +79,8 @@ impl TimeEntry {
         let mut res = client
             .patch(
                 [
-                    Client::BASE_URL.to_string(),
-                    format!(
+                    Client::BASE_URL,
+                    &format!(
                         "/api/v9/workspaces/{}/time_entries/{}/stop",
                         self.workspace_id, self.id
                     ),
@@ -94,8 +96,8 @@ impl TimeEntry {
         let mut res = client
             .delete(
                 [
-                    Client::BASE_URL.to_string(),
-                    format!(
+                    Client::BASE_URL,
+                    &format!(
                         "/api/v9/workspaces/{}/time_entries/{}",
                         self.workspace_id, self.id
                     ),
@@ -123,16 +125,22 @@ pub struct CreateTimeEntry {
     #[serde(with = "time::serde::rfc3339")]
     start: OffsetDateTime,
     workspace_id: u64,
+    project_id: Option<u64>,
 }
 
 impl CreateTimeEntry {
-    pub fn new(description: String, workspace_id: u64) -> Self {
+    pub fn new(
+        description: String,
+        workspace_id: u64,
+        project_id: Option<u64>,
+    ) -> Self {
         Self {
             created_with: "ST-Toggl-Client".to_string(),
             description,
             duration: -1,
             start: OffsetDateTime::now_utc(),
             workspace_id,
+            project_id,
         }
     }
 
@@ -163,16 +171,37 @@ pub enum TimeEntryMessage {
 }
 
 impl TimeEntry {
-    pub fn view(&self, i: usize) -> Element<TimeEntryMessage> {
+    pub fn view(
+        &self,
+        i: usize,
+        projects: &[Project],
+    ) -> Element<TimeEntryMessage> {
+        let project = projects.iter().find(|p| Some(p.id) == self.project_id);
         let name = self
             .description
             .clone()
             .unwrap_or("<NO DESCRIPTION>".to_string());
+        let project_badge = if let Some(project) = project {
+            let color = Color::parse(&project.color)
+                .expect("Project color must be valid");
+            badge::Badge::new(text(project.name.clone()).size(12)).style(
+                move |_, _| badge::Style {
+                    background: color.into(),
+                    ..badge::Style::default()
+                },
+            )
+        } else {
+            badge(text("No project".to_string()).size(12))
+                .style(iced_aw::style::badge::light)
+        };
         button(
             row![
-                text(name)
-                    .width(Length::Fill)
-                    .wrapping(text::Wrapping::None),
+                column![
+                    text(name)
+                        .width(Length::Fill)
+                        .wrapping(text::Wrapping::None),
+                    project_badge
+                ],
                 text(self.duration_string()).width(Length::Fixed(60f32))
             ]
             .spacing(10)
@@ -217,7 +246,7 @@ impl TimeEntry {
             .align_y(Vertical::Center),
         )
         .style(|_| container::Style {
-            background: Some(iced::Background::Color(Color::BLACK)),
+            background: Some(iced::color!(0x161616).into()),
             text_color: Some(Color::WHITE),
             ..container::Style::default()
         })
