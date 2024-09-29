@@ -3,10 +3,24 @@ use iced::alignment::Vertical;
 use iced::widget::{button, column, container, row, text};
 use iced::{Color, Element, Length};
 use iced_aw::badge;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 
-use crate::client::{Client, Result};
+use crate::client::{Client, Result as NetResult};
 use crate::project::Project;
+
+fn datetime_serialize_utc<S: Serializer>(
+    x: &DateTime<Local>,
+    s: S,
+) -> Result<S::Ok, S::Error> {
+    x.to_utc().serialize(s)
+}
+
+fn maybe_datetime_serialize_utc<S: Serializer>(
+    x: &Option<DateTime<Local>>,
+    s: S,
+) -> Result<S::Ok, S::Error> {
+    x.map(|d| d.to_utc()).serialize(s)
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TimeEntry {
@@ -17,8 +31,11 @@ pub struct TimeEntry {
     pub id: u64,
     pub permissions: Option<Vec<String>>,
     pub project_id: Option<u64>,
+    #[serde(serialize_with = "datetime_serialize_utc")]
     pub start: DateTime<Local>,
+    #[serde(serialize_with = "maybe_datetime_serialize_utc")]
     pub stop: Option<DateTime<Local>>,
+    #[serde(serialize_with = "maybe_datetime_serialize_utc")]
     pub server_deleted_at: Option<DateTime<Local>>,
     pub tag_ids: Vec<u64>,
     pub tags: Vec<String>,
@@ -28,7 +45,7 @@ pub struct TimeEntry {
 }
 
 impl TimeEntry {
-    // pub async fn load(client: &Client) -> Result<(Option<Self>, Vec<Self>)> {
+    // pub async fn load(client: &Client) -> NetResult<(Option<Self>, Vec<Self>)> {
     //     let all_entries = client
     //         .get([Client::BASE_URL, "/api/v9/me/time_entries"].join(""))
     //         .send()
@@ -38,23 +55,7 @@ impl TimeEntry {
     //     Ok(Self::split_running(all_entries))
     // }
 
-    pub fn into_local_timezone(self) -> Self {
-        let offset = Local::now().timezone();
-        Self {
-            start: self.start.with_timezone(&offset),
-            stop: self.stop.map(|d| d.with_timezone(&offset)),
-            server_deleted_at: self
-                .server_deleted_at
-                .map(|d| d.with_timezone(&offset)),
-            ..self
-        }
-    }
-
     pub fn split_running(all_entries: Vec<Self>) -> (Option<Self>, Vec<Self>) {
-        let all_entries: Vec<_> = all_entries
-            .into_iter()
-            .map(|e| e.into_local_timezone())
-            .collect();
         match &all_entries[..] {
             [] => (None, vec![]),
             [head, rest @ ..] => {
@@ -67,7 +68,7 @@ impl TimeEntry {
         }
     }
 
-    pub async fn save(&self, client: &Client) -> Result<()> {
+    pub async fn save(&self, client: &Client) -> NetResult<()> {
         let mut res = client
             .put(
                 [
@@ -85,7 +86,7 @@ impl TimeEntry {
         Client::check_status(&mut res).await
     }
 
-    pub async fn stop(&self, client: &Client) -> Result<()> {
+    pub async fn stop(&self, client: &Client) -> NetResult<()> {
         assert!(self.stop.is_none());
         let mut res = client
             .patch(
@@ -103,7 +104,7 @@ impl TimeEntry {
         Client::check_status(&mut res).await
     }
 
-    pub async fn delete(self, client: &Client) -> Result<()> {
+    pub async fn delete(self, client: &Client) -> NetResult<()> {
         let mut res = client
             .delete(
                 [
@@ -155,7 +156,7 @@ impl CreateTimeEntry {
         }
     }
 
-    pub async fn create(&self, client: &Client) -> Result<()> {
+    pub async fn create(&self, client: &Client) -> NetResult<()> {
         let mut res = client
             .post(
                 [

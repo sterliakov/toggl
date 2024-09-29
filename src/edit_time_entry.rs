@@ -129,10 +129,7 @@ impl EditTimeEntry {
                 self.selected_project = p;
             }
             EditTimeEntryMessage::Submit => {
-                match customization.parse_datetime(
-                    &self.start_text,
-                    *self.entry.start.fixed_offset().offset(),
-                ) {
+                match customization.parse_datetime(&self.start_text) {
                     Err(_) => {
                         return Command::done(EditTimeEntryMessage::Error(
                             format!("Invalid start date: {}", self.start_text),
@@ -145,17 +142,14 @@ impl EditTimeEntry {
                     }
                     Ok(Some(date)) => self.entry.start = date,
                 };
+                if let Ok(date) = customization.parse_datetime(&self.stop_text)
                 {
-                    let Ok(date) = customization.parse_datetime(
-                        &self.stop_text,
-                        *self.entry.start.fixed_offset().offset(),
-                    ) else {
-                        return Command::done(EditTimeEntryMessage::Error(
-                            format!("Invalid end date: {}", self.stop_text),
-                        ));
-                    };
                     self.entry.stop = date;
-                }
+                } else {
+                    return Command::done(EditTimeEntryMessage::Error(
+                        format!("Invalid end date: {}", self.stop_text),
+                    ));
+                };
                 self.entry.duration = self
                     .entry
                     .stop

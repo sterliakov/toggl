@@ -1,4 +1,4 @@
-use chrono::{DateTime, FixedOffset, Local, NaiveDate, NaiveDateTime};
+use chrono::{DateTime, Local, NaiveDate, NaiveDateTime};
 use iced::widget::{button, text};
 use iced_aw::menu;
 use serde::{Deserialize, Serialize};
@@ -49,7 +49,7 @@ pub enum TimeFormat {
 impl LocaleString for TimeFormat {
     fn to_format_string(&self) -> String {
         match self {
-            TimeFormat::H12 => "%I:%M-%S %p".to_string(),
+            TimeFormat::H12 => "%I:%M:%S %p".to_string(),
             TimeFormat::H24 => "%T".to_string(),
         }
     }
@@ -102,18 +102,17 @@ impl Customization {
     pub fn parse_datetime(
         &self,
         text: &str,
-        assumed_offset: FixedOffset,
     ) -> Result<Option<DateTime<Local>>, String> {
+        let assumed_offset = *Local::now().offset();
         if text.is_empty() {
             return Ok(None);
         }
         let naive =
             NaiveDateTime::parse_from_str(text, &self.datetime_format())
                 .map_err(|e| e.to_string())?;
-        Ok(Some(DateTime::<Local>::from_naive_utc_and_offset(
-            naive,
-            assumed_offset,
-        )))
+        Ok(Some(
+            naive.and_local_timezone(assumed_offset).unwrap().into(),
+        ))
     }
 }
 
