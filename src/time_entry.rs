@@ -33,15 +33,15 @@ pub struct TimeEntry {
 }
 
 impl TimeEntry {
-    pub async fn load(client: &Client) -> Result<(Option<Self>, Vec<Self>)> {
-        let all_entries = client
-            .get([Client::BASE_URL, "/api/v9/me/time_entries"].join(""))
-            .send()
-            .await?
-            .body_json::<Vec<Self>>()
-            .await?;
-        Ok(Self::split_running(all_entries))
-    }
+    // pub async fn load(client: &Client) -> Result<(Option<Self>, Vec<Self>)> {
+    //     let all_entries = client
+    //         .get([Client::BASE_URL, "/api/v9/me/time_entries"].join(""))
+    //         .send()
+    //         .await?
+    //         .body_json::<Vec<Self>>()
+    //         .await?;
+    //     Ok(Self::split_running(all_entries))
+    // }
 
     pub fn split_running(all_entries: Vec<Self>) -> (Option<Self>, Vec<Self>) {
         match &all_entries[..] {
