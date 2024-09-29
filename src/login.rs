@@ -1,4 +1,4 @@
-use iced::widget::{button, column, container, scrollable, text_input};
+use iced::widget::{button, column, container, scrollable, text, text_input};
 use iced::{Element, Fill, Task as Command};
 use serde::{Deserialize, Serialize};
 
@@ -8,6 +8,7 @@ use crate::client::{Client, Result as NetResult};
 pub struct LoginScreen {
     email: String,
     password: String,
+    error: String,
 }
 
 #[derive(Clone, Debug)]
@@ -15,7 +16,9 @@ pub enum LoginScreenMessage {
     EmailEdited(String),
     PasswordEdited(String),
     Submit,
-    Completed(Result<String, String>),
+    Completed(String),
+    Error(String),
+    TabPressed(bool),
 }
 
 impl LoginScreen {
@@ -27,14 +30,17 @@ impl LoginScreen {
         let content = column![
             text_input("Email", &self.email)
                 .id("email-input")
+                .on_submit(LoginScreenMessage::Submit)
                 .on_input(LoginScreenMessage::EmailEdited),
             text_input("Password", &self.password)
                 .id("password-input")
                 .secure(true)
+                .on_submit(LoginScreenMessage::Submit)
                 .on_input(LoginScreenMessage::PasswordEdited),
             button("Login")
                 .on_press(LoginScreenMessage::Submit)
-                .style(button::primary)
+                .style(button::primary),
+            text(&self.error).style(text::danger)
         ]
         .spacing(10);
 
@@ -50,34 +56,50 @@ impl LoginScreen {
             LoginScreenMessage::PasswordEdited(password) => {
                 self.password = password
             }
+            LoginScreenMessage::Error(err) => self.error = err,
             LoginScreenMessage::Submit => {
-                return Command::future(Self::submit(
-                    self.email.clone(),
-                    self.password.clone(),
-                ));
+                return Command::future(self.clone().submit());
             }
             LoginScreenMessage::Completed(_) => {}
+            LoginScreenMessage::TabPressed(is_shift) => {
+                return if is_shift {
+                    iced::widget::focus_previous()
+                } else {
+                    iced::widget::focus_next()
+                }
+            }
         };
         Command::none()
     }
 
-    async fn submit(email: String, password: String) -> LoginScreenMessage {
-        LoginScreenMessage::Completed(
-            Self::call_submit(&email, &password)
-                .await
-                .map_err(|e| e.to_string()),
-        )
+    async fn submit(self) -> LoginScreenMessage {
+        if self.email.is_empty() {
+            return LoginScreenMessage::Error(
+                "Email must not be empty".to_string(),
+            );
+        }
+        if self.password.is_empty() {
+            return LoginScreenMessage::Error(
+                "Password must not be empty".to_string(),
+            );
+        }
+        match Self::call_submit(&self.email, &self.password)
+            .await
+            .map_err(|e| e.to_string())
+        {
+            Ok(token) => LoginScreenMessage::Completed(token),
+            Err(e) => LoginScreenMessage::Error(e),
+        }
     }
 
     async fn call_submit(email: &str, password: &str) -> NetResult<String> {
         let client = Client::from_email_password(email, password);
-        let data = client
+        let mut rsp = client
             .get([Client::BASE_URL, "/api/v9/me"].join(""))
             .send()
-            .await?
-            .body_json::<LoginResponse>()
             .await?;
-        Ok(data.api_token)
+        Client::check_status(&mut rsp).await?;
+        Ok(rsp.body_json::<LoginResponse>().await?.api_token)
     }
 }
 

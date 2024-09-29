@@ -24,6 +24,7 @@ pub enum EditTimeEntryMessage {
     StopEdited(String),
     Submit,
     Delete,
+    Abort,
     Completed,
     Error(String),
 }
@@ -52,7 +53,7 @@ impl EditTimeEntry {
     pub fn view(&self) -> Element<EditTimeEntryMessage> {
         let content = column![
             column![button("X")
-                .on_press(EditTimeEntryMessage::Completed)
+                .on_press(EditTimeEntryMessage::Abort)
                 .style(button::text),]
             .align_x(Right)
             .width(Fill),
@@ -145,6 +146,7 @@ impl EditTimeEntry {
                     self.api_token.clone(),
                 ));
             }
+            EditTimeEntryMessage::Abort => {}
             EditTimeEntryMessage::Completed => {}
             EditTimeEntryMessage::Error(err) => {
                 self.error = Some(err);

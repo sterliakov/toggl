@@ -113,6 +113,8 @@ enum Message {
     WindowIdReceived(Option<window::Id>),
     SelectWorkspace(u64),
     SelectProject(Option<u64>),
+    TabPressed(bool),
+    EscPressed,
 }
 
 lazy_static! {
@@ -209,9 +211,9 @@ impl App {
                 _ => {}
             },
             Screen::Unauthed(screen) => match message {
-                Message::LoginProxy(LoginScreenMessage::Completed(Ok(
+                Message::LoginProxy(LoginScreenMessage::Completed(
                     api_token,
-                ))) => {
+                )) => {
                     self.screen = Screen::Authed;
                     self.state = State {
                         api_token: api_token.clone(),
@@ -225,6 +227,11 @@ impl App {
                 }
                 Message::LoginProxy(msg) => {
                     return screen.update(msg).map(Message::LoginProxy)
+                }
+                Message::TabPressed(is_shift) => {
+                    return screen
+                        .update(LoginScreenMessage::TabPressed(is_shift))
+                        .map(Message::LoginProxy)
                 }
                 _ => {}
             },
@@ -340,6 +347,10 @@ impl App {
                 ) => {
                     self.screen = Screen::Loading;
                     return Command::perform(State::load(), Message::Loaded);
+                }
+                Message::EscPressed
+                | Message::EditTimeEntryProxy(EditTimeEntryMessage::Abort) => {
+                    self.screen = Screen::Loaded(TemporaryState::default())
                 }
                 Message::EditTimeEntryProxy(msg) => {
                     return screen
@@ -511,27 +522,33 @@ impl App {
     }
 
     fn subscription(&self) -> iced::Subscription<Message> {
-        iced::time::every(std::time::Duration::from_secs(1))
-            .map(|_| Message::Tick)
-        // use keyboard::key;
-        // keyboard::on_key_press(|key, modifiers| {
-        //     let keyboard::Key::Named(key) = key else {
-        //         return None;
-        //     };
-
-        //     match (key, modifiers) {
-        //         (key::Named::Tab, _) => Some(Message::TabPressed {
-        //             shift: modifiers.shift(),
-        //         }),
-        //         (key::Named::ArrowUp, keyboard::Modifiers::SHIFT) => {
-        //             Some(Message::ToggleFullscreen(window::Mode::Fullscreen))
-        //         }
-        //         (key::Named::ArrowDown, keyboard::Modifiers::SHIFT) => {
-        //             Some(Message::ToggleFullscreen(window::Mode::Windowed))
-        //         }
-        //         _ => None,
-        //     }
-        // })
+        use iced::keyboard::{
+            key::Named as NamedKey, on_key_press, Key, Modifiers,
+        };
+        iced::Subscription::batch(vec![
+            iced::time::every(std::time::Duration::from_secs(1))
+                .map(|_| Message::Tick),
+            on_key_press(|key, modifiers| {
+                let Key::Named(key) = key else {
+                    return None;
+                };
+                match (key, modifiers) {
+                    (NamedKey::Tab, _) => {
+                        if modifiers.bits() == 0 {
+                            Some(Message::TabPressed(false))
+                        } else if modifiers == Modifiers::SHIFT {
+                            Some(Message::TabPressed(true))
+                        } else {
+                            None
+                        }
+                    }
+                    (NamedKey::Escape, _) if modifiers.bits() == 0 => {
+                        Some(Message::EscPressed)
+                    }
+                    _ => None,
+                }
+            }),
+        ])
     }
 }
 
@@ -600,7 +617,6 @@ impl State {
 
     async fn save(self) -> Result<(), SaveError> {
         use async_std::prelude::*;
-        println!("Saving with token: {}", self.api_token);
 
         let json = serde_json::to_string_pretty(&self)
             .map_err(|_| SaveError::Format)?;
