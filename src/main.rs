@@ -258,6 +258,25 @@ impl App {
                         });
                     }
                 }
+                Message::TimeEntryProxy(TimeEntryMessage::Duplicate(e)) => {
+                    let token = self.state.api_token.clone();
+                    return Command::future(async move {
+                        let client = Client::from_api_token(&token);
+                        let entry = CreateTimeEntry::new(
+                            e.description,
+                            e.workspace_id,
+                            e.project_id,
+                        );
+                        match entry.create(&client).await {
+                            // FIXME: display error
+                            Err(e) => {
+                                eprintln!("Submit failed: {e}");
+                                Message::Reload
+                            }
+                            Ok(_) => Message::Reload,
+                        }
+                    });
+                }
                 Message::SetInitialRunningEntry(description) => {
                     temp_state.new_running_entry_description = description;
                 }
@@ -274,7 +293,7 @@ impl App {
                     return Command::future(async move {
                         let client = Client::from_api_token(&token);
                         let entry = CreateTimeEntry::new(
-                            description,
+                            Some(description),
                             workspace_id,
                             project_id,
                         );
@@ -331,21 +350,9 @@ impl App {
             Screen::Unauthed(screen) => screen.view().map(Message::LoginProxy),
             Screen::Loaded(temp_state) => {
                 let running_entry = match &self.state.running_entry {
-                    None => row![text_input(
-                        "Create new entry...",
+                    None => row![running_entry_input(
                         &temp_state.new_running_entry_description
-                    )
-                    .id("running-entry-input")
-                    .style(|_, _| text_input::Style {
-                        background: iced::color!(0x161616).into(),
-                        border: iced::Border::default(),
-                        icon: Color::WHITE,
-                        placeholder: iced::color!(0xd8d8d8),
-                        value: Color::WHITE,
-                        selection: Color::WHITE,
-                    })
-                    .on_input(Message::SetInitialRunningEntry)
-                    .on_submit(Message::SubmitNewRunningEntry)],
+                    )],
                     Some(entry) => {
                         row![entry.view_running().map(Message::TimeEntryProxy)]
                     }
@@ -356,38 +363,7 @@ impl App {
                         .iter()
                         .chunk_by(|e| e.start.date())
                         .into_iter()
-                        .map(|(start, tasks)| {
-                            column(
-                                std::iter::once(
-                                    container(
-                                        text(date_as_human_readable(start))
-                                            .style(text::success),
-                                    )
-                                    .padding(Padding {
-                                        left: 10f32,
-                                        ..Padding::default()
-                                    })
-                                    .style(|_| container::Style {
-                                        background: Some(
-                                            iced::color!(0xc8c8c8).into(),
-                                        ),
-                                        ..container::Style::default()
-                                    })
-                                    .width(iced::Length::Fill)
-                                    .into(),
-                                )
-                                .chain(
-                                    tasks.enumerate().flat_map(|(i, task)| {
-                                        vec![
-                                            task.view(i, &self.state.projects)
-                                                .map(Message::TimeEntryProxy),
-                                            horizontal_rule(0.5).into(),
-                                        ]
-                                    }),
-                                ),
-                            )
-                            .into()
-                        }),
+                        .map(|(start, tasks)| self.day_group(start, tasks)),
                 );
 
                 container(column![
@@ -493,6 +469,38 @@ impl App {
             .width(iced::Length::Fill)
     }
 
+    fn day_group<'a>(
+        &self,
+        start: time::Date,
+        tasks: impl Iterator<Item = &'a TimeEntry>,
+    ) -> Element<'a, Message> {
+        column(
+            std::iter::once(
+                container(
+                    text(date_as_human_readable(start)).style(text::success),
+                )
+                .padding(Padding {
+                    left: 10f32,
+                    ..Padding::default()
+                })
+                .style(|_| container::Style {
+                    background: Some(iced::color!(0xc8c8c8).into()),
+                    ..container::Style::default()
+                })
+                .width(iced::Length::Fill)
+                .into(),
+            )
+            .chain(tasks.enumerate().flat_map(|(i, task)| {
+                vec![
+                    task.view(i, &self.state.projects)
+                        .map(Message::TimeEntryProxy),
+                    horizontal_rule(0.5).into(),
+                ]
+            })),
+        )
+        .into()
+    }
+
     async fn load_everything(api_token: String) -> Message {
         let client = Client::from_api_token(&api_token);
         ExtendedMe::load(&client)
@@ -528,6 +536,22 @@ impl App {
 
 fn loading_message<'a>() -> Element<'a, Message> {
     center(text("Loading...").width(Fill).align_x(Center).size(50)).into()
+}
+
+fn running_entry_input(description: &str) -> Element<'_, Message> {
+    text_input("Create new entry...", description)
+        .id("running-entry-input")
+        .style(|_, _| text_input::Style {
+            background: iced::color!(0x161616).into(),
+            border: iced::Border::default(),
+            icon: Color::WHITE,
+            placeholder: iced::color!(0xd8d8d8),
+            value: Color::WHITE,
+            selection: Color::WHITE,
+        })
+        .on_input(Message::SetInitialRunningEntry)
+        .on_submit(Message::SubmitNewRunningEntry)
+        .into()
 }
 
 #[derive(Debug, Clone)]

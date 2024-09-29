@@ -120,7 +120,7 @@ impl TimeEntry {
 #[derive(Clone, Debug, Serialize)]
 pub struct CreateTimeEntry {
     created_with: String,
-    description: String, // Could be Option<String>, but let's be stricter
+    description: Option<String>,
     duration: i64,
     #[serde(with = "time::serde::rfc3339")]
     start: OffsetDateTime,
@@ -130,7 +130,7 @@ pub struct CreateTimeEntry {
 
 impl CreateTimeEntry {
     pub fn new(
-        description: String,
+        description: Option<String>,
         workspace_id: u64,
         project_id: Option<u64>,
     ) -> Self {
@@ -168,6 +168,7 @@ pub enum TimeEntryMessage {
     Edit(usize),
     EditRunning,
     StopRunning,
+    Duplicate(Box<TimeEntry>),
 }
 
 impl TimeEntry {
@@ -202,6 +203,12 @@ impl TimeEntry {
                         .wrapping(text::Wrapping::None),
                     project_badge
                 ],
+                button("+")
+                    .style(button::primary)
+                    .on_press_with(|| TimeEntryMessage::Duplicate(Box::new(
+                        self.clone()
+                    )))
+                    .width(Length::Shrink),
                 text(self.duration_string()).width(Length::Fixed(60f32))
             ]
             .spacing(10)
