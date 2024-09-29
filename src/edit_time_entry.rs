@@ -1,10 +1,12 @@
 use iced::widget::{
-    button, column, container, row, scrollable, text, text_editor, text_input,
+    button, column, container, pick_list, row, scrollable, text, text_editor,
+    text_input,
 };
 use iced::{Element, Fill, Length, Right, Task as Command};
 
 use crate::client::Client;
 use crate::customization::Customization;
+use crate::project::{MaybeProject, Project};
 use crate::time_entry::TimeEntry;
 
 #[derive(Debug)]
@@ -15,11 +17,14 @@ pub struct EditTimeEntry {
     start_text: String,
     stop_text: String,
     error: Option<String>,
+    projects: Vec<MaybeProject>,
+    selected_project: MaybeProject,
 }
 
 #[derive(Clone, Debug)]
 pub enum EditTimeEntryMessage {
     DescriptionEdited(text_editor::Action),
+    ProjectSelected(MaybeProject),
     StartEdited(String),
     StopEdited(String),
     Submit,
@@ -34,10 +39,15 @@ impl EditTimeEntry {
         entry: TimeEntry,
         api_token: &str,
         customization: &Customization,
+        projects: Vec<Project>,
     ) -> Self {
         let description = entry.description.clone();
         let start_text = customization.format_datetime(&Some(entry.start));
         let stop_text = customization.format_datetime(&entry.stop);
+        let selected_project = projects
+            .iter()
+            .find(|p| Some(p.id) == entry.project_id)
+            .cloned();
         Self {
             entry,
             api_token: api_token.to_string(),
@@ -47,6 +57,8 @@ impl EditTimeEntry {
             start_text,
             stop_text,
             error: None,
+            projects: projects.into_iter().map(|p| p.into()).collect(),
+            selected_project: selected_project.into(),
         }
     }
 
@@ -68,6 +80,13 @@ impl EditTimeEntry {
                     .on_input(EditTimeEntryMessage::StopEdited),
             ]
             .spacing(20),
+            pick_list(
+                std::iter::once(MaybeProject::None)
+                    .chain(self.projects.clone().into_iter())
+                    .collect::<Vec<_>>(),
+                Some(self.selected_project.clone()),
+                EditTimeEntryMessage::ProjectSelected
+            ),
             row![
                 button("Save")
                     .on_press(EditTimeEntryMessage::Submit)
@@ -101,6 +120,13 @@ impl EditTimeEntry {
             }
             EditTimeEntryMessage::StopEdited(stop) => {
                 self.stop_text = stop;
+            }
+            EditTimeEntryMessage::ProjectSelected(p) => {
+                self.entry.project_id = match &p {
+                    MaybeProject::Some(p) => Some(p.id),
+                    MaybeProject::None => None,
+                };
+                self.selected_project = p;
             }
             EditTimeEntryMessage::Submit => {
                 match customization.parse_datetime(

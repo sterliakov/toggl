@@ -242,6 +242,7 @@ impl App {
                         self.state.time_entries[i].clone(),
                         &self.state.api_token,
                         &self.state.customization,
+                        self.state.projects.clone(),
                     ));
                 }
                 Message::TimeEntryProxy(TimeEntryMessage::EditRunning) => {
@@ -250,6 +251,7 @@ impl App {
                             entry.clone(),
                             &self.state.api_token,
                             &self.state.customization,
+                            self.state.projects.clone(),
                         ));
                     }
                 }
