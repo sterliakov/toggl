@@ -26,11 +26,11 @@ mod workspace;
 use crate::client::Client;
 use crate::edit_time_entry::{EditTimeEntry, EditTimeEntryMessage};
 use crate::login::{LoginScreen, LoginScreenMessage};
-use crate::project::Project;
+use crate::project::{Project, ProjectId};
 use crate::related_info::ExtendedMe;
 use crate::time_entry::CreateTimeEntry;
 use crate::time_entry::{TimeEntry, TimeEntryMessage};
-use crate::workspace::Workspace;
+use crate::workspace::{Workspace, WorkspaceId};
 
 pub fn main() -> iced::Result {
     env_logger::init();
@@ -47,8 +47,8 @@ struct State {
     running_entry: Option<TimeEntry>,
     projects: Vec<Project>,
     workspaces: Vec<Workspace>,
-    default_workspace: Option<u64>,
-    default_project: Option<u64>,
+    default_workspace: Option<WorkspaceId>,
+    default_project: Option<ProjectId>,
     customization: Customization,
 }
 
@@ -60,7 +60,7 @@ impl State {
             .or_else(|| me.workspaces.first().map(|ws| ws.id));
         let project_id = self
             .default_project
-            .filter(|&proj| me.workspaces.iter().any(|p| p.id == proj));
+            .filter(|&proj| me.projects.iter().any(|p| p.id == proj));
         let (running_entry, time_entries) =
             TimeEntry::split_running(if let Some(ws_id) = ws_id {
                 me.time_entries
@@ -120,8 +120,8 @@ enum Message {
     Discarded,
     Error(String),
     WindowIdReceived(Option<window::Id>),
-    SelectWorkspace(u64),
-    SelectProject(Option<u64>),
+    SelectWorkspace(WorkspaceId),
+    SelectProject(Option<ProjectId>),
     TabPressed(bool),
     EscPressed,
 }
@@ -460,7 +460,7 @@ impl App {
     }
 
     fn menu(&self) -> Element<Message> {
-        let selected_ws = self.state.default_workspace.unwrap_or(0);
+        let selected_ws = self.state.default_workspace;
         let ws_menu = menu::Menu::new(
             self.state
                 .workspaces
@@ -469,7 +469,7 @@ impl App {
                     menu::Item::new(
                         button(text(ws.name.clone()))
                             .width(iced::Length::Fill)
-                            .on_press_maybe(if selected_ws == ws.id {
+                            .on_press_maybe(if selected_ws == Some(ws.id) {
                                 None
                             } else {
                                 Some(Message::SelectWorkspace(ws.id))
@@ -511,7 +511,7 @@ impl App {
         menu::MenuBar::new(vec![
             menu::Item::with_menu(
                 menu_button("Info", Message::Discarded)
-                    .width(iced::Length::Fixed(50f32)),
+                    .width(iced::Length::Fixed(40f32)),
                 menu::Menu::new(vec![
                     menu::Item::new(menu_button("Reload", Message::Reload)),
                     menu::Item::with_menu(

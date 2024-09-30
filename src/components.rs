@@ -9,6 +9,7 @@ pub fn menu_button<T>(
             background: None,
             ..button::Style::default()
         })
+        .padding([4, 4])
         .on_press(message)
         .width(iced::Length::Fill)
 }

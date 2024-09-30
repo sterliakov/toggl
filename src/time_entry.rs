@@ -7,7 +7,8 @@ use log::debug;
 use serde::{Deserialize, Serialize, Serializer};
 
 use crate::client::{Client, Result as NetResult};
-use crate::project::Project;
+use crate::project::{Project, ProjectId};
+use crate::workspace::WorkspaceId;
 
 fn datetime_serialize_utc<S: Serializer>(
     x: &DateTime<Local>,
@@ -31,7 +32,7 @@ pub struct TimeEntry {
     pub duration: i64,
     pub id: u64,
     pub permissions: Option<Vec<String>>,
-    pub project_id: Option<u64>,
+    pub project_id: Option<ProjectId>,
     #[serde(serialize_with = "datetime_serialize_utc")]
     pub start: DateTime<Local>,
     #[serde(serialize_with = "maybe_datetime_serialize_utc")]
@@ -42,7 +43,7 @@ pub struct TimeEntry {
     pub tags: Vec<String>,
     pub task_id: Option<u64>,
     pub user_id: u64,
-    pub workspace_id: u64,
+    pub workspace_id: WorkspaceId,
 }
 
 impl TimeEntry {
@@ -140,15 +141,15 @@ pub struct CreateTimeEntry {
     description: Option<String>,
     duration: i64,
     start: DateTime<Local>,
-    workspace_id: u64,
-    project_id: Option<u64>,
+    workspace_id: WorkspaceId,
+    project_id: Option<ProjectId>,
 }
 
 impl CreateTimeEntry {
     pub fn new(
         description: Option<String>,
-        workspace_id: u64,
-        project_id: Option<u64>,
+        workspace_id: WorkspaceId,
+        project_id: Option<ProjectId>,
     ) -> Self {
         Self {
             created_with: "ST-Toggl-Client".to_string(),
