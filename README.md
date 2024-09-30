@@ -26,6 +26,27 @@ Here's what it can do:
 
 This app is built with [iced](https://github.com/iced-rs/iced) framework.
 
+## Installation
+
+If you are fine with grabbing random binaries from the internet, just go to the
+[Releases] page, take the binary for your arch & platform and copy to whatever
+location is on your `PATH`. Here's an example:
+
+```bash
+wget https://github.com/sterliakov/toggl/releases/download/v0.1.0/toggl-tracker-x86_64-unknown-linux-gnu.tar.gz
+tar xzf toggl-tracker-x86_64-unknown-linux-gnu.tar.gz
+./toggl-tracker
+```
+
+To build from source:
+
+```bash
+cd "$(mktemp -d)"
+git clone https://github.com/sterliakov/toggl-tracker
+cd toggl-tracker
+cargo install --path .
+```
+
 ## TODO
 
 A few more things would be nice to implement:
