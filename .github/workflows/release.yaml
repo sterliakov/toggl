@@ -5,8 +5,7 @@ permissions:
 
 on:
   push:
-    tags:
-      - '*'
+    tags: ['*']
 
 jobs:
   create-release:
@@ -20,6 +19,7 @@ jobs:
   upload-assets:
     needs: create-release
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: aarch64-apple-darwin
