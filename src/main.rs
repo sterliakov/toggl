@@ -45,6 +45,7 @@ struct State {
     api_token: String,
     time_entries: Vec<TimeEntry>,
     running_entry: Option<TimeEntry>,
+    has_more_entries: bool,
     projects: Vec<Project>,
     workspaces: Vec<Workspace>,
     default_workspace: Option<WorkspaceId>,
@@ -73,6 +74,7 @@ impl State {
         Self {
             running_entry,
             time_entries,
+            has_more_entries: true,
             projects: me.projects,
             workspaces: me.workspaces,
             default_workspace: ws_id,
@@ -115,6 +117,8 @@ enum Message {
     CustomizationProxy(CustomizationMessage),
     SetInitialRunningEntry(String),
     SubmitNewRunningEntry,
+    LoadMore,
+    LoadedMore(Vec<TimeEntry>),
     Tick,
     Reload,
     Discarded,
@@ -360,6 +364,34 @@ impl App {
                         }
                     });
                 }
+                Message::LoadMore => {
+                    info!("Loading older entries...");
+                    let token = self.state.api_token.clone();
+                    let first_start =
+                        self.state.time_entries.last().map(|e| e.start);
+                    return Command::future(async move {
+                        let client = Client::from_api_token(&token);
+                        match TimeEntry::load(first_start, &client).await {
+                            Ok(res) => Message::LoadedMore(res),
+                            Err(e) => Message::Error(e.to_string()),
+                        }
+                    });
+                }
+                Message::LoadedMore(entries) => {
+                    info!("Loaded older entries.");
+                    if entries.is_empty() {
+                        debug!("No older entries.");
+                        self.state.has_more_entries = false;
+                    }
+                    self.state.time_entries.extend(entries.into_iter().filter(
+                        |e| {
+                            Some(e.workspace_id) == self.state.default_workspace
+                        },
+                    ));
+                    return Command::perform(self.state.clone().save(), |_| {
+                        Message::Discarded
+                    });
+                }
                 Message::Reload => {
                     info!("Syncing with remote...");
                     *temp_state = TemporaryState::default();
@@ -426,6 +458,16 @@ impl App {
                         .chunk_by(|e| e.start.date_naive())
                         .into_iter()
                         .map(|(start, tasks)| self.day_group(start, tasks)),
+                )
+                .push(
+                    row![button("Load more")
+                        .on_press_maybe(if self.state.has_more_entries {
+                            Some(Message::LoadMore)
+                        } else {
+                            None
+                        })
+                        .style(button::secondary)]
+                    .padding([10, 10]),
                 );
                 let error_repr = if self.error.is_empty() {
                     None

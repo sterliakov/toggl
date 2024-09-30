@@ -24,7 +24,7 @@ fn maybe_datetime_serialize_utc<S: Serializer>(
     x.map(|d| d.to_utc()).serialize(s)
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TimeEntry {
     pub at: String,
     pub billable: bool,
@@ -47,15 +47,30 @@ pub struct TimeEntry {
 }
 
 impl TimeEntry {
-    // pub async fn load(client: &Client) -> NetResult<(Option<Self>, Vec<Self>)> {
-    //     let all_entries = client
-    //         .get([Client::BASE_URL, "/api/v9/me/time_entries"].join(""))
-    //         .send()
-    //         .await?
-    //         .body_json::<Vec<Self>>()
-    //         .await?;
-    //     Ok(Self::split_running(all_entries))
-    // }
+    pub async fn load(
+        before: Option<DateTime<Local>>,
+        client: &Client,
+    ) -> NetResult<Vec<Self>> {
+        #[derive(Serialize)]
+        struct QueryParams {
+            #[serde(serialize_with = "maybe_datetime_serialize_utc")]
+            before: Option<DateTime<Local>>,
+        }
+
+        let mut res = client
+            .get([Client::BASE_URL, "/api/v9/me/time_entries"].join(""))
+            .query(&QueryParams { before })?
+            .send()
+            .await?;
+        Client::check_status(&mut res).await?;
+        let entries = res.body_json::<Vec<Self>>().await?;
+        if before.is_none() {
+            Ok(entries)
+        } else {
+            // The API parses this bound as inclusive, we don't need duplicates
+            Ok(entries[1..].to_vec())
+        }
+    }
 
     pub fn split_running(all_entries: Vec<Self>) -> (Option<Self>, Vec<Self>) {
         match &all_entries[..] {
@@ -293,12 +308,19 @@ mod test {
     use crate::client::Client;
 
     #[async_std::test]
-    async fn test_load() {
+    async fn test_load_until_now() {
         let client = Client::from_email_password(
             &std::env::var("TEST_EMAIL").expect("Please pass TEST_EMAIL"),
             &std::env::var("TEST_PASSWORD").expect("Please pass TEST_PASSWORD"),
         );
-        let (_, entries) = TimeEntry::load(&client).await.expect("Failed");
+        let entries = TimeEntry::load(None, &client).await.expect("Failed");
         assert_ne!(entries.len(), 0);
+
+        let prev_entries =
+            TimeEntry::load(entries.last().map(|e| e.start), &client)
+                .await
+                .expect("Failed");
+        assert_ne!(prev_entries.len(), 0);
+        assert_ne!(prev_entries.first(), entries.last());
     }
 }
