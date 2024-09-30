@@ -50,6 +50,25 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+
+      # Some windows magic
+      # https://github.com/nymtech/nym-vpn-client/pull/54/files#diff-7a42dc8739297053550b8882b7bf3fcc770725f51365f7b273ed5a7d9d91c329R151
+      # https://github.com/sfackler/rust-openssl/issues/2149
+      - name: Enable git long-paths
+        if: contains(matrix.os, 'windows')
+        run: git config --system core.longpaths true
+      - name: Setup Perl
+        uses: shogo82148/actions-setup-perl@v1
+        if: contains(matrix.os, 'windows')
+        with:
+          perl-version: '5.38'
+          distribution: strawberry
+      - id: windows-configure-perl
+        if: contains(matrix.os, 'windows')
+        run: |
+          echo "PERL=$((where.exe perl)[0])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          echo "OPENSSL_SRC_PERL=$((where.exe perl)[0])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
           # (required) Comma-separated list of binary names (non-extension portion of filename) to build and upload.
