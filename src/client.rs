@@ -1,4 +1,5 @@
 use base64::{engine::general_purpose::STANDARD, Engine as _};
+use log::{error, info};
 use std::ops::{Deref, DerefMut};
 use surf::middleware::{Middleware, Next};
 pub use surf::Result;
@@ -27,12 +28,16 @@ impl Client {
         if !status.is_success() {
             let binary = &res.body_bytes().await?;
             let msg = if binary.is_empty() {
+                error!("Received an unsuccessful response (empty body).");
                 status.to_string()
             } else {
-                std::str::from_utf8(binary)?.to_string()
+                let response_text = std::str::from_utf8(binary)?.to_string();
+                error!("Received an unsuccessful response (non-empty body: '{response_text}').");
+                response_text
             };
             Err(surf::Error::from_str(status, msg))
         } else {
+            info!("Received a successful response.");
             Ok(())
         }
     }

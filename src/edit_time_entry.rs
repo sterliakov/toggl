@@ -150,11 +150,16 @@ impl EditTimeEntry {
                         format!("Invalid end date: {}", self.stop_text),
                     ));
                 };
-                self.entry.duration = self
+                let duration = self
                     .entry
                     .stop
-                    .map(|stop| (stop - self.entry.start).num_seconds())
-                    .unwrap_or(-1);
+                    .map(|stop| (stop - self.entry.start).num_seconds());
+                if duration.unwrap_or(1) < 0 {
+                    return Command::done(EditTimeEntryMessage::Error(
+                        "Start must come before end!".to_string(),
+                    ));
+                };
+                self.entry.duration = duration.unwrap_or(-1);
                 return Command::future(Self::submit(
                     self.entry.clone(),
                     self.api_token.clone(),

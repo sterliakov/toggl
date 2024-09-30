@@ -1,5 +1,6 @@
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime};
 use iced::widget::{button, text};
+use iced::Task as Command;
 use iced_aw::menu;
 use serde::{Deserialize, Serialize};
 
@@ -121,18 +122,26 @@ pub enum CustomizationMessage {
     SelectTimeFormat(TimeFormat),
     SelectDateFormat(DateFormat),
     Discarded,
+    Save,
 }
 
 impl Customization {
-    pub fn update(&mut self, message: CustomizationMessage) {
+    pub fn update(
+        &mut self,
+        message: CustomizationMessage,
+    ) -> Command<CustomizationMessage> {
         match message {
             CustomizationMessage::SelectTimeFormat(fmt) => {
-                self.time_format = fmt
+                self.time_format = fmt;
+                Command::done(CustomizationMessage::Save)
             }
             CustomizationMessage::SelectDateFormat(fmt) => {
-                self.date_format = fmt
+                self.date_format = fmt;
+                Command::done(CustomizationMessage::Save)
             }
-            CustomizationMessage::Discarded => {}
+            CustomizationMessage::Discarded | CustomizationMessage::Save => {
+                Command::none()
+            }
         }
     }
 

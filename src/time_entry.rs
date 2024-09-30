@@ -3,6 +3,7 @@ use iced::alignment::Vertical;
 use iced::widget::{button, column, container, row, text};
 use iced::{Color, Element, Length};
 use iced_aw::badge;
+use log::debug;
 use serde::{Deserialize, Serialize, Serializer};
 
 use crate::client::{Client, Result as NetResult};
@@ -69,6 +70,7 @@ impl TimeEntry {
     }
 
     pub async fn save(&self, client: &Client) -> NetResult<()> {
+        debug!("Updating a time entry {}...", self.id);
         let mut res = client
             .put(
                 [
@@ -87,6 +89,7 @@ impl TimeEntry {
     }
 
     pub async fn stop(&self, client: &Client) -> NetResult<()> {
+        debug!("Stopping a time entry {}...", self.id);
         assert!(self.stop.is_none());
         let mut res = client
             .patch(
@@ -105,6 +108,7 @@ impl TimeEntry {
     }
 
     pub async fn delete(self, client: &Client) -> NetResult<()> {
+        debug!("Deleting a time entry {}...", self.id);
         let mut res = client
             .delete(
                 [
@@ -157,6 +161,7 @@ impl CreateTimeEntry {
     }
 
     pub async fn create(&self, client: &Client) -> NetResult<()> {
+        debug!("Creating a time entry...");
         let mut res = client
             .post(
                 [

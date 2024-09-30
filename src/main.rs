@@ -9,6 +9,7 @@ use iced::{Center, Element, Fill, Padding, Task as Command};
 use iced_aw::menu;
 use itertools::Itertools;
 use lazy_static::lazy_static;
+use log::{debug, error, info, warn};
 
 use serde::{Deserialize, Serialize};
 
@@ -32,6 +33,7 @@ use crate::time_entry::{TimeEntry, TimeEntryMessage};
 use crate::workspace::Workspace;
 
 pub fn main() -> iced::Result {
+    env_logger::init();
     iced::application(App::title, App::update, App::view)
         .subscription(App::subscription)
         .window_size((500.0, 600.0))
@@ -52,8 +54,13 @@ struct State {
 
 impl State {
     pub fn update_from_context(self, me: ExtendedMe) -> Self {
-        let first_id = me.workspaces.first().map(|ws| ws.id);
-        let ws_id = self.default_workspace.or(first_id);
+        let ws_id = self
+            .default_workspace
+            .filter(|&ws| me.workspaces.iter().any(|w| w.id == ws))
+            .or_else(|| me.workspaces.first().map(|ws| ws.id));
+        let project_id = self
+            .default_project
+            .filter(|&proj| me.workspaces.iter().any(|p| p.id == proj));
         let (running_entry, time_entries) =
             TimeEntry::split_running(if let Some(ws_id) = ws_id {
                 me.time_entries
@@ -63,13 +70,13 @@ impl State {
             } else {
                 me.time_entries
             });
-        // FIXME: this may produce inconsistent state if a workspace/project was deleted.
         Self {
             running_entry,
             time_entries,
             projects: me.projects,
             workspaces: me.workspaces,
             default_workspace: ws_id,
+            default_project: project_id,
             ..self
         }
     }
@@ -85,6 +92,7 @@ struct App {
     state: State,
     screen: Screen,
     window_id: Option<window::Id>,
+    error: String,
 }
 
 #[derive(Debug, Default)]
@@ -110,6 +118,7 @@ enum Message {
     Tick,
     Reload,
     Discarded,
+    Error(String),
     WindowIdReceived(Option<window::Id>),
     SelectWorkspace(u64),
     SelectProject(Option<u64>),
@@ -133,11 +142,7 @@ lazy_static! {
 impl App {
     fn new() -> (Self, Command<Message>) {
         (
-            Self {
-                state: State::default(),
-                screen: Screen::Loading,
-                window_id: None,
-            },
+            Self::default(),
             Command::batch(vec![
                 Command::perform(State::load(), Message::Loaded),
                 iced::window::get_latest().map(Message::WindowIdReceived),
@@ -172,12 +177,14 @@ impl App {
     fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::WindowIdReceived(id) => {
+                debug!("Setting window id to {id:?}");
                 self.window_id = id;
                 if let Some(id) = id {
                     return window::change_icon(id, self.icon());
                 };
             }
             Message::DataFetched(Ok(state)) => {
+                info!("Loaded initial data.");
                 match &self.screen {
                     Screen::Loaded(_) => {}
                     _ => {
@@ -191,8 +198,15 @@ impl App {
                     self.update_icon(),
                 ]);
             }
-            Message::DataFetched(Err(ref e)) => {
-                eprintln!("Data fetch failed: {e}");
+            Message::DataFetched(Err(e)) => {
+                error!("Failed to fetch initial data: {e}");
+                self.error = e;
+                return Command::none();
+            }
+            Message::Error(e) => {
+                error!("Received generic error: {e}");
+                self.error = e;
+                return Command::none();
             }
             _ => {}
         };
@@ -200,12 +214,14 @@ impl App {
         match &mut self.screen {
             Screen::Loading => match message {
                 Message::Loaded(Ok(state)) => {
+                    info!("Loaded state file.");
                     self.screen = Screen::Authed;
                     let api_token = state.api_token.clone();
                     self.state = *state;
                     return Command::future(Self::load_everything(api_token));
                 }
-                Message::Loaded(_) => {
+                Message::Loaded(Err(e)) => {
+                    error!("Failed to load state file: {e:?}");
                     self.screen = Screen::Unauthed(LoginScreen::new());
                 }
                 _ => {}
@@ -214,16 +230,16 @@ impl App {
                 Message::LoginProxy(LoginScreenMessage::Completed(
                     api_token,
                 )) => {
+                    info!("Authenticated successfully.");
                     self.screen = Screen::Authed;
                     self.state = State {
                         api_token: api_token.clone(),
                         ..State::default()
                     };
-                    return Command::future(self.state.clone().save())
-                        .map(|_| Message::Discarded)
-                        .chain(Command::future(Self::load_everything(
-                            api_token,
-                        )));
+                    return Command::perform(self.state.clone().save(), |_| {
+                        Message::Discarded
+                    })
+                    .chain(Command::future(Self::load_everything(api_token)));
                 }
                 Message::LoginProxy(msg) => {
                     return screen.update(msg).map(Message::LoginProxy)
@@ -257,18 +273,25 @@ impl App {
                 }
                 Message::TimeEntryProxy(TimeEntryMessage::StopRunning) => {
                     if let Some(entry) = self.state.running_entry.clone() {
+                        info!("Stopping running entry {}...", entry.id);
                         let token = self.state.api_token.clone();
                         return Command::future(async move {
                             let client = Client::from_api_token(&token);
                             match entry.stop(&client).await {
-                                // FIXME: display error
                                 Err(e) => {
-                                    eprintln!("Stop failed: {e}");
+                                    error!(
+                                        "Failed to stop a running entry: {e}"
+                                    );
+                                    Message::Error(e.to_string())
+                                }
+                                Ok(_) => {
+                                    info!("Entry stopped.");
                                     Message::Reload
                                 }
-                                Ok(_) => Message::Reload,
                             }
                         });
+                    } else {
+                        warn!("Requested to stop a nonexistent running entry.");
                     }
                 }
                 Message::TimeEntryProxy(TimeEntryMessage::Duplicate(e)) => {
@@ -281,17 +304,28 @@ impl App {
                             e.project_id,
                         );
                         match entry.create(&client).await {
-                            // FIXME: display error
                             Err(e) => {
-                                eprintln!("Submit failed: {e}");
+                                error!("Failed to duplicate an entry: {e}");
+                                Message::Error(e.to_string())
+                            }
+                            Ok(_) => {
+                                info!("Entry duplicated.");
                                 Message::Reload
                             }
-                            Ok(_) => Message::Reload,
                         }
                     });
                 }
+                Message::CustomizationProxy(CustomizationMessage::Save) => {
+                    return Command::perform(self.state.clone().save(), |_| {
+                        Message::Discarded
+                    });
+                }
                 Message::CustomizationProxy(msg) => {
-                    self.state.customization.update(msg)
+                    return self
+                        .state
+                        .customization
+                        .update(msg)
+                        .map(Message::CustomizationProxy);
                 }
                 Message::SetInitialRunningEntry(description) => {
                     temp_state.new_running_entry_description = description;
@@ -300,11 +334,12 @@ impl App {
                     let token = self.state.api_token.clone();
                     let description =
                         temp_state.new_running_entry_description.clone();
-                    // FIXME: ensure this by some other means
-                    let workspace_id = self
-                        .state
-                        .default_workspace
-                        .expect("Workspace must exist");
+                    let Some(workspace_id) = self.state.default_workspace
+                    else {
+                        return Command::done(Message::Error(
+                            "No workspace selected!".to_string(),
+                        ));
+                    };
                     let project_id = self.state.default_project;
                     return Command::future(async move {
                         let client = Client::from_api_token(&token);
@@ -314,28 +349,33 @@ impl App {
                             project_id,
                         );
                         match entry.create(&client).await {
-                            // FIXME: display error
                             Err(e) => {
-                                eprintln!("Submit failed: {e}");
+                                error!("Failed to create a new entry: {e}");
+                                Message::Error(e.to_string())
+                            }
+                            Ok(_) => {
+                                info!("Entry created.");
                                 Message::Reload
                             }
-                            Ok(_) => Message::Reload,
                         }
                     });
                 }
                 Message::Reload => {
+                    info!("Syncing with remote...");
                     *temp_state = TemporaryState::default();
                     return Command::future(Self::load_everything(
                         self.state.api_token.clone(),
                     ));
                 }
                 Message::SelectWorkspace(ws_id) => {
+                    info!("Selected workspace: {ws_id}");
                     self.state.default_workspace = Some(ws_id);
                     return Command::future(Self::load_everything(
                         self.state.api_token.clone(),
                     ));
                 }
                 Message::SelectProject(project_id) => {
+                    info!("Selected project: {project_id:?}");
                     self.state.default_project = project_id;
                     return Command::perform(self.state.clone().save(), |_| {
                         Message::Discarded
@@ -372,11 +412,11 @@ impl App {
             Screen::Unauthed(screen) => screen.view().map(Message::LoginProxy),
             Screen::Loaded(temp_state) => {
                 let running_entry = match &self.state.running_entry {
-                    None => row![running_entry_input(
-                        &temp_state.new_running_entry_description
-                    )],
+                    None => running_entry_input(
+                        &temp_state.new_running_entry_description,
+                    ),
                     Some(entry) => {
-                        row![entry.view_running().map(Message::TimeEntryProxy)]
+                        entry.view_running().map(Message::TimeEntryProxy)
                     }
                 };
                 let content = column(
@@ -387,21 +427,29 @@ impl App {
                         .into_iter()
                         .map(|(start, tasks)| self.day_group(start, tasks)),
                 );
+                let error_repr = if self.error.is_empty() {
+                    None
+                } else {
+                    Some(text(&self.error).style(text::danger))
+                };
 
-                container(column![
-                    self.menu(),
-                    running_entry,
-                    container(scrollable(content)).style(|_| {
-                        container::Style {
-                            border: iced::Border {
-                                color: iced::color!(0x0000cd),
-                                width: 0.5,
-                                radius: 0.into(),
-                            },
-                            ..container::Style::default()
-                        }
-                    })
-                ])
+                container(
+                    column![
+                        self.menu(),
+                        running_entry,
+                        container(scrollable(content)).style(|_| {
+                            container::Style {
+                                border: iced::Border {
+                                    color: iced::color!(0x0000cd),
+                                    width: 0.5,
+                                    radius: 0.into(),
+                                },
+                                ..container::Style::default()
+                            }
+                        })
+                    ]
+                    .push_maybe(error_repr),
+                )
                 .center_x(Fill)
                 .into()
             }
@@ -559,19 +607,22 @@ fn loading_message<'a>() -> Element<'a, Message> {
 }
 
 fn running_entry_input(description: &str) -> Element<'_, Message> {
-    text_input("Create new entry...", description)
-        .id("running-entry-input")
-        .style(|_, _| text_input::Style {
-            background: iced::color!(0x161616).into(),
-            border: iced::Border::default(),
-            icon: Color::WHITE,
-            placeholder: iced::color!(0xd8d8d8),
-            value: Color::WHITE,
-            selection: Color::WHITE,
-        })
-        .on_input(Message::SetInitialRunningEntry)
-        .on_submit(Message::SubmitNewRunningEntry)
-        .into()
+    row![
+        text_input("Create new entry...", description)
+            .id("running-entry-input")
+            .style(|_, _| text_input::Style {
+                background: iced::color!(0x161616).into(),
+                border: iced::Border::default(),
+                icon: Color::WHITE,
+                placeholder: iced::color!(0xd8d8d8),
+                value: Color::WHITE,
+                selection: Color::WHITE,
+            })
+            .on_input(Message::SetInitialRunningEntry)
+            .on_submit(Message::SubmitNewRunningEntry),
+        button("Create").on_press(Message::SubmitNewRunningEntry)
+    ]
+    .into()
 }
 
 #[derive(Debug, Clone)]
