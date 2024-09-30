@@ -42,8 +42,8 @@ To build from source:
 
 ```bash
 cd "$(mktemp -d)"
-git clone https://github.com/sterliakov/toggl-tracker
-cd toggl-tracker
+git clone https://github.com/sterliakov/toggl
+cd toggl
 cargo install --path .
 ```
 
