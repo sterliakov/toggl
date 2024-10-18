@@ -258,12 +258,16 @@ impl App {
             Screen::Authed => {}
             Screen::Loaded(temp_state) => match message {
                 Message::TimeEntryProxy(TimeEntryMessage::Edit(i)) => {
-                    self.screen = Screen::EditEntry(EditTimeEntry::new(
-                        self.state.time_entries[i].clone(),
-                        &self.state.api_token,
-                        &self.state.customization,
-                        self.state.projects.clone(),
-                    ));
+                    if let Some(entry) =
+                        self.state.time_entries.iter().find(|e| e.id == i)
+                    {
+                        self.screen = Screen::EditEntry(EditTimeEntry::new(
+                            entry.clone(),
+                            &self.state.api_token,
+                            &self.state.customization,
+                            self.state.projects.clone(),
+                        ));
+                    }
                 }
                 Message::TimeEntryProxy(TimeEntryMessage::EditRunning) => {
                     if let Some(entry) = &self.state.running_entry {
@@ -594,9 +598,9 @@ impl App {
                 .width(iced::Length::Fill)
                 .into(),
             )
-            .chain(tasks.enumerate().flat_map(|(i, task)| {
+            .chain(tasks.flat_map(|task| {
                 vec![
-                    task.view(i, &self.state.projects)
+                    task.view(&self.state.projects)
                         .map(Message::TimeEntryProxy),
                     horizontal_rule(0.5).into(),
                 ]

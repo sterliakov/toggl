@@ -198,18 +198,14 @@ impl CreateTimeEntry {
 
 #[derive(Clone, Debug)]
 pub enum TimeEntryMessage {
-    Edit(usize),
+    Edit(u64),
     EditRunning,
     StopRunning,
     Duplicate(Box<TimeEntry>),
 }
 
 impl TimeEntry {
-    pub fn view(
-        &self,
-        i: usize,
-        projects: &[Project],
-    ) -> Element<TimeEntryMessage> {
+    pub fn view(&self, projects: &[Project]) -> Element<TimeEntryMessage> {
         let project = projects.iter().find(|p| Some(p.id) == self.project_id);
         let name = self
             .description
@@ -251,7 +247,7 @@ impl TimeEntry {
             })
             .align_y(Vertical::Center),
         )
-        .on_press(TimeEntryMessage::Edit(i))
+        .on_press(TimeEntryMessage::Edit(self.id))
         .clip(true)
         .style(button::text)
         .into()
