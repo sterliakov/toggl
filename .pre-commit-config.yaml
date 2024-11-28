@@ -28,6 +28,7 @@ repos:
         args: [--autofix, --indent, '4']
     -   id: pretty-format-toml
         args: [--autofix, --indent, '4', --trailing-comma]
+        exclude: ^Cargo.lock$
 
 -   repo: https://github.com/python-jsonschema/check-jsonschema
     rev: 0.29.4
