@@ -1,6 +1,6 @@
 repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
     hooks:
     -   id: check-added-large-files
     -   id: trailing-whitespace
@@ -11,11 +11,31 @@ repos:
     -   id: check-symlinks
     -   id: mixed-line-ending
         args: [--fix=lf]
-    - id: check-toml
-    - id: check-yaml
-  - repo: https://github.com/doublify/pre-commit-rust
+    -   id: check-toml
+    -   id: check-yaml
+
+-   repo: https://github.com/doublify/pre-commit-rust
     rev: v1.0
     hooks:
-    - id: fmt
-    - id: cargo-check
-    - id: clippy
+    -   id: fmt
+    -   id: cargo-check
+    -   id: clippy
+
+-   repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
+    rev: v2.14.0
+    hooks:
+    -   id: pretty-format-yaml
+        args: [--autofix, --indent, '4']
+    -   id: pretty-format-toml
+        args: [--autofix, --indent, '4', --trailing-comma]
+        exclude: ^Cargo.lock$
+
+-   repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.29.4
+    hooks:
+    -   id: check-github-workflows
+
+-   repo: https://github.com/rhysd/actionlint
+    rev: v1.7.4
+    hooks:
+    -   id: actionlint
