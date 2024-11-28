@@ -15,3 +15,6 @@ jobs:
                 components: rustfmt,clippy
         -   uses: actions/setup-python@v5
         -   uses: pre-commit/action@v3.0.1
+        -   name: Ensure it builds
+            run: |
+                cargo build
