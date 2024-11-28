@@ -1,5 +1,7 @@
 # Toggl Track client
 
+[![Renovate enabled](https://img.shields.io/badge/renovate-enabled-brightgreen.svg)](https://renovatebot.com/)
+
 ## Disclaimer
 
 This project is built solely by me with no affiliation with Toggl OÜ whatsoever.
