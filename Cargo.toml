@@ -6,7 +6,7 @@ directories-next = "2.0.0"
 env_logger = "0.11.5"
 iced = {version = "0.13.1", features = ["async-std", "debug", "advanced", "image"]}
 iced_aw = {version = "0.11.0", features = ["badge", "menu"], default-features = false}
-itertools = "0.13.0"
+itertools = "0.14.0"
 lazy_static = "1.5.0"
 log = {version = "0.4.22", features = ["max_level_trace", "release_max_level_info"]}
 openssl = {version = "0.10.66", features = ["vendored"]}
