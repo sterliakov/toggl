@@ -109,7 +109,7 @@ enum Screen {
 
 #[derive(Debug, Clone)]
 enum Message {
-    Loaded(Result<Box<State>, LoadError>),
+    Loaded(Result<Box<State>, StatePersistenceError>),
     DataFetched(Result<ExtendedMe, String>),
     LoginProxy(LoginScreenMessage),
     TimeEntryProxy(TimeEntryMessage),
@@ -225,7 +225,7 @@ impl App {
                     return Command::future(Self::load_everything(api_token));
                 }
                 Message::Loaded(Err(e)) => {
-                    error!("Failed to load state file: {e:?}");
+                    error!("Failed to load state file: {e}");
                     self.screen = Screen::Unauthed(LoginScreen::new());
                 }
                 _ => {}
@@ -672,16 +672,19 @@ fn running_entry_input(description: &str) -> Element<'_, Message> {
 }
 
 #[derive(Debug, Clone)]
-enum LoadError {
-    File,
+enum StatePersistenceError {
+    FileSystem,
     Format,
 }
 
-#[derive(Debug, Clone)]
-enum SaveError {
-    File,
-    Write,
-    Format,
+impl std::fmt::Display for StatePersistenceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let msg = match self {
+            Self::FileSystem => "Failed to read/write a state file.",
+            Self::Format => "State file format not recognized.",
+        };
+        msg.fmt(f)
+    }
 }
 
 impl State {
@@ -698,44 +701,46 @@ impl State {
         path
     }
 
-    async fn load() -> Result<Box<Self>, LoadError> {
+    async fn load() -> Result<Box<Self>, StatePersistenceError> {
         use async_std::prelude::*;
 
         let mut contents = String::new();
 
         let mut file = async_std::fs::File::open(Self::path())
             .await
-            .map_err(|_| LoadError::File)?;
+            .map_err(|_| StatePersistenceError::FileSystem)?;
 
         file.read_to_string(&mut contents)
             .await
-            .map_err(|_| LoadError::File)?;
+            .map_err(|_| StatePersistenceError::FileSystem)?;
 
-        serde_json::from_str(&contents).map_err(|_| LoadError::Format)
+        serde_json::from_str(&contents)
+            .map_err(|_| StatePersistenceError::Format)
     }
 
-    async fn save(self) -> Result<(), SaveError> {
+    async fn save(self) -> Result<(), StatePersistenceError> {
+        // This takes ownership for easier async saving
         use async_std::prelude::*;
 
         let json = serde_json::to_string_pretty(&self)
-            .map_err(|_| SaveError::Format)?;
+            .map_err(|_| StatePersistenceError::Format)?;
 
         let path = Self::path();
 
         if let Some(dir) = path.parent() {
             async_std::fs::create_dir_all(dir)
                 .await
-                .map_err(|_| SaveError::File)?;
+                .map_err(|_| StatePersistenceError::FileSystem)?;
         }
 
         {
             let mut file = async_std::fs::File::create(path)
                 .await
-                .map_err(|_| SaveError::File)?;
+                .map_err(|_| StatePersistenceError::FileSystem)?;
 
             file.write_all(json.as_bytes())
                 .await
-                .map_err(|_| SaveError::Write)?;
+                .map_err(|_| StatePersistenceError::FileSystem)?;
         }
 
         Ok(())
