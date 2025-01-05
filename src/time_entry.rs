@@ -130,10 +130,9 @@ impl TimeEntry {
     }
 
     fn duration_string(&self) -> String {
-        let diff = self
-            .stop
-            .unwrap_or(Local::now().with_timezone(&self.start.timezone()))
-            - self.start;
+        let diff = self.stop.unwrap_or_else(|| {
+            Local::now().with_timezone(&self.start.timezone())
+        }) - self.start;
         duration_to_hms(&diff)
     }
 }
@@ -240,7 +239,7 @@ impl TimeEntry {
         let name = self
             .description
             .clone()
-            .unwrap_or("<NO DESCRIPTION>".to_string());
+            .unwrap_or_else(|| "<NO DESCRIPTION>".to_string());
         container(
             row![
                 button(text(name).wrapping(text::Wrapping::None))
@@ -286,12 +285,16 @@ mod test {
     use super::TimeEntry;
     use crate::client::Client;
 
-    #[async_std::test]
-    async fn test_load_until_now() {
-        let client = Client::from_email_password(
+    fn test_client() -> Client {
+        Client::from_email_password(
             &std::env::var("TEST_EMAIL").expect("Please pass TEST_EMAIL"),
             &std::env::var("TEST_PASSWORD").expect("Please pass TEST_PASSWORD"),
-        );
+        )
+    }
+
+    #[async_std::test]
+    async fn test_load_until_now() {
+        let client = test_client();
         let entries = TimeEntry::load(None, &client).await.expect("Failed");
         assert_ne!(entries.len(), 0);
 
