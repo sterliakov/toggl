@@ -31,11 +31,12 @@ repos:
         exclude: ^Cargo.lock$
 
 -   repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.29.4
+    rev: 0.30.0
     hooks:
     -   id: check-github-workflows
+    -   id: check-renovate
 
 -   repo: https://github.com/rhysd/actionlint
-    rev: v1.7.4
+    rev: v1.7.6
     hooks:
     -   id: actionlint
