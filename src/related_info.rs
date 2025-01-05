@@ -19,10 +19,10 @@ impl ExtendedMe {
     pub async fn load(client: &Client) -> NetResult<Self> {
         debug!("Fetching profile and related objects...");
         let mut rsp = client
-            .get(
-                [Client::BASE_URL, "/api/v9/me?with_related_data=true"]
-                    .join(""),
-            )
+            .get(format!(
+                "{}/api/v9/me?with_related_data=true",
+                Client::BASE_URL
+            ))
             .send()
             .await?;
         Client::check_status(&mut rsp).await?;

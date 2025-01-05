@@ -95,7 +95,7 @@ impl LoginScreen {
     async fn call_submit(email: &str, password: &str) -> NetResult<String> {
         let client = Client::from_email_password(email, password);
         let mut rsp = client
-            .get([Client::BASE_URL, "/api/v9/me"].join(""))
+            .get(format!("{}/api/v9/me", Client::BASE_URL))
             .send()
             .await?;
         Client::check_status(&mut rsp).await?;

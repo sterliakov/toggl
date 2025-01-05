@@ -58,7 +58,7 @@ impl TimeEntry {
         }
 
         let mut res = client
-            .get([Client::BASE_URL, "/api/v9/me/time_entries"].join(""))
+            .get(format!("{}/api/v9/me/time_entries", Client::BASE_URL))
             .query(&QueryParams { before })?
             .send()
             .await?;
@@ -88,16 +88,12 @@ impl TimeEntry {
     pub async fn save(&self, client: &Client) -> NetResult<()> {
         debug!("Updating a time entry {}...", self.id);
         let mut res = client
-            .put(
-                [
-                    Client::BASE_URL,
-                    &format!(
-                        "/api/v9/workspaces/{}/time_entries/{}",
-                        self.workspace_id, self.id
-                    ),
-                ]
-                .join(""),
-            )
+            .put(format!(
+                "{}/api/v9/workspaces/{}/time_entries/{}",
+                Client::BASE_URL,
+                self.workspace_id,
+                self.id
+            ))
             .body_json(&self)?
             .send()
             .await?;
@@ -108,16 +104,12 @@ impl TimeEntry {
         debug!("Stopping a time entry {}...", self.id);
         assert!(self.stop.is_none());
         let mut res = client
-            .patch(
-                [
-                    Client::BASE_URL,
-                    &format!(
-                        "/api/v9/workspaces/{}/time_entries/{}/stop",
-                        self.workspace_id, self.id
-                    ),
-                ]
-                .join(""),
-            )
+            .patch(format!(
+                "{}/api/v9/workspaces/{}/time_entries/{}/stop",
+                Client::BASE_URL,
+                self.workspace_id,
+                self.id
+            ))
             .send()
             .await?;
         Client::check_status(&mut res).await
@@ -126,16 +118,12 @@ impl TimeEntry {
     pub async fn delete(self, client: &Client) -> NetResult<()> {
         debug!("Deleting a time entry {}...", self.id);
         let mut res = client
-            .delete(
-                [
-                    Client::BASE_URL,
-                    &format!(
-                        "/api/v9/workspaces/{}/time_entries/{}",
-                        self.workspace_id, self.id
-                    ),
-                ]
-                .join(""),
-            )
+            .delete(format!(
+                "{}/api/v9/workspaces/{}/time_entries/{}",
+                Client::BASE_URL,
+                self.workspace_id,
+                self.id
+            ))
             .send()
             .await?;
         Client::check_status(&mut res).await
@@ -179,16 +167,11 @@ impl CreateTimeEntry {
     pub async fn create(&self, client: &Client) -> NetResult<()> {
         debug!("Creating a time entry...");
         let mut res = client
-            .post(
-                [
-                    Client::BASE_URL.to_string(),
-                    format!(
-                        "/api/v9/workspaces/{}/time_entries",
-                        self.workspace_id
-                    ),
-                ]
-                .join(""),
-            )
+            .post(format!(
+                "{}/api/v9/workspaces/{}/time_entries",
+                Client::BASE_URL,
+                self.workspace_id
+            ))
             .body_json(&self)?
             .send()
             .await?;
