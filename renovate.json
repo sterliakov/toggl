@@ -3,5 +3,8 @@
   "extends": [
     "config:recommended",
     "group:allNonMajor"
-  ]
+  ],
+  "pre-commit": {
+    "enabled": true
+  }
 }
