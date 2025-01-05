@@ -738,9 +738,6 @@ impl State {
                 .map_err(|_| SaveError::Write)?;
         }
 
-        // This is a simple way to save at most once every couple seconds
-        async_std::task::sleep(std::time::Duration::from_secs(2)).await;
-
         Ok(())
     }
 }
