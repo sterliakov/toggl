@@ -1,81 +1,91 @@
 name: Release
 
 permissions:
-    contents: write
+  contents: read
 
 on:
-    push:
-        tags: ['*']
+  push:
+    tags: ['*']
 
 jobs:
-    create-release:
-        runs-on: ubuntu-latest
-        steps:
-        -   uses: actions/checkout@v4
-        -   uses: taiki-e/create-gh-release-action@v1
-            with:
-                token: ${{ secrets.GITHUB_TOKEN }}
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: taiki-e/create-gh-release-action@v1      # zizmor: ignore[ref-confusion]
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-    upload-assets:
-        needs: create-release
-        strategy:
-            fail-fast: false
-            matrix:
-                include:
-                -   target: aarch64-apple-darwin
-                    os: macos-latest
-                -   target: aarch64-unknown-linux-gnu
-                    os: ubuntu-latest
-                -   target: arm-unknown-linux-gnueabihf
-                    os: ubuntu-latest
-                -   target: armv7-unknown-linux-gnueabihf
-                    os: ubuntu-latest
-                -   target: x86_64-apple-darwin
-                    os: macos-latest
-                -   target: x86_64-pc-windows-msvc
-                    os: windows-latest
-                -   target: aarch64-pc-windows-msvc
-                    os: windows-latest
-                -   target: x86_64-unknown-linux-gnu
-                    os: ubuntu-latest
-        runs-on: ${{ matrix.os }}
-        steps:
-        -   uses: actions/checkout@v4
+  upload-assets:
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: arm-unknown-linux-gnueabihf
+            os: ubuntu-latest
+          - target: armv7-unknown-linux-gnueabihf
+            os: ubuntu-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+    permissions:
+      contents: write
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       # Some windows magic
       # https://github.com/nymtech/nym-vpn-client/pull/54/files#diff-7a42dc8739297053550b8882b7bf3fcc770725f51365f7b273ed5a7d9d91c329R151
       # https://github.com/sfackler/rust-openssl/issues/2149
-        -   name: Enable git long-paths
-            if: contains(matrix.os, 'windows')
-            run: git config --system core.longpaths true
-        -   name: Setup Perl
-            uses: shogo82148/actions-setup-perl@v1
-            if: contains(matrix.os, 'windows')
-            with:
-                perl-version: '5.38'
-                distribution: strawberry
-        -   id: windows-configure-perl
-            if: contains(matrix.os, 'windows')
-            run: |
-                # shellcheck disable=SC1073,SC1009,SC1072
-                echo "PERL=$((where.exe perl)[0])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-                echo "OPENSSL_SRC_PERL=$((where.exe perl)[0])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Enable git long-paths
+        if: contains(matrix.os, 'windows')
+        run: git config --system core.longpaths true
+      - name: Setup Perl
+        uses: shogo82148/actions-setup-perl@v1
+        if: contains(matrix.os, 'windows')
+        with:
+          perl-version: '5.38'
+          distribution: strawberry
+      - id: windows-configure-perl
+        if: contains(matrix.os, 'windows')
+        run: |
+          # shellcheck disable=SC1073,SC1009,SC1072
+          echo "PERL=$((where.exe perl)[0])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          echo "OPENSSL_SRC_PERL=$((where.exe perl)[0])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-        -   uses: taiki-e/upload-rust-binary-action@v1
-            with:
+      - uses: taiki-e/upload-rust-binary-action@v1      # zizmor: ignore[ref-confusion]
+        with:
           # (required) Comma-separated list of binary names (non-extension portion of filename) to build and upload.
           # Note that glob pattern is not supported yet.
-                bin: toggl-tracker
-                checksum: sha256
-                target: ${{ matrix.target }}
-                token: ${{ secrets.GITHUB_TOKEN }}
+          bin: toggl-tracker
+          checksum: sha256
+          target: ${{ matrix.target }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-    complete-release:
-        needs: upload-assets
-        runs-on: ubuntu-latest
-        steps:
-        -   uses: softprops/action-gh-release@v2
-            with:
-                draft: false
-            env:
-                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  complete-release:
+    needs: upload-assets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
