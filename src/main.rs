@@ -4,13 +4,11 @@ use iced::widget::{
     button, center, column, container, horizontal_rule, row, scrollable, text,
     text_input,
 };
-use iced::{window, Color};
-use iced::{Center, Element, Fill, Padding, Task as Command};
+use iced::{window, Center, Color, Element, Fill, Padding, Task as Command};
 use iced_aw::menu;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
-
 use serde::{Deserialize, Serialize};
 
 mod client;
@@ -28,8 +26,7 @@ use crate::edit_time_entry::{EditTimeEntry, EditTimeEntryMessage};
 use crate::login::{LoginScreen, LoginScreenMessage};
 use crate::project::{Project, ProjectId};
 use crate::related_info::ExtendedMe;
-use crate::time_entry::CreateTimeEntry;
-use crate::time_entry::{TimeEntry, TimeEntryMessage};
+use crate::time_entry::{CreateTimeEntry, TimeEntry, TimeEntryMessage};
 use crate::workspace::{Workspace, WorkspaceId};
 
 pub fn main() -> iced::Result {
@@ -618,9 +615,8 @@ impl App {
     }
 
     fn subscription(&self) -> iced::Subscription<Message> {
-        use iced::keyboard::{
-            key::Named as NamedKey, on_key_press, Key, Modifiers,
-        };
+        use iced::keyboard::key::Named as NamedKey;
+        use iced::keyboard::{on_key_press, Key, Modifiers};
         iced::Subscription::batch(vec![
             iced::time::every(std::time::Duration::from_secs(1))
                 .map(|_| Message::Tick),

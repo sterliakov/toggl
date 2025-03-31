@@ -1,11 +1,10 @@
-use crate::{
-    client::{Client, Result as NetResult},
-    project::Project,
-    time_entry::TimeEntry,
-    workspace::Workspace,
-};
 use log::debug;
 use serde::{Deserialize, Serialize};
+
+use crate::client::{Client, Result as NetResult};
+use crate::project::Project;
+use crate::time_entry::TimeEntry;
+use crate::workspace::Workspace;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExtendedMe {
