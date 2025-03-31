@@ -94,6 +94,8 @@ struct App {
     error: String,
 }
 
+// There's one instance of this enum at a time, no need to box
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Default)]
 enum Screen {
     #[default]
