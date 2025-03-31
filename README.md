@@ -79,3 +79,12 @@ If you're experiencing a bug on Windows that does not reproduce on other
 platforms, you're left on your own, sorry. I don't have a Windows machine
 by hand and don't want to acquire one. However, if you can fix the problem
 yourself, a PR is welcome!
+
+## Developers
+
+Our pre-commit config assumes that the your system is configured to use
+`nightly` as default Rust. It is is not,
+
+```bash
+$ rustup default nightly
+```

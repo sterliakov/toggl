@@ -1,4 +1,4 @@
-use chrono::{DateTime, Local, NaiveDate, NaiveDateTime};
+use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone};
 use iced::widget::{button, text};
 use iced::Task as Command;
 use iced_aw::menu;
@@ -104,16 +104,13 @@ impl Customization {
         &self,
         text: &str,
     ) -> Result<Option<DateTime<Local>>, String> {
-        let assumed_offset = *Local::now().offset();
         if text.is_empty() {
             return Ok(None);
         }
         let naive =
             NaiveDateTime::parse_from_str(text, &self.datetime_format())
                 .map_err(|e| e.to_string())?;
-        Ok(Some(
-            naive.and_local_timezone(assumed_offset).unwrap().into(),
-        ))
+        Ok(Some(Local.from_local_datetime(&naive).unwrap()))
     }
 }
 
