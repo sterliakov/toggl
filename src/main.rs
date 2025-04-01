@@ -4,13 +4,11 @@ use iced::widget::{
     button, center, column, container, horizontal_rule, row, scrollable, text,
     text_input,
 };
-use iced::{window, Color};
-use iced::{Center, Element, Fill, Padding, Task as Command};
+use iced::{window, Center, Color, Element, Fill, Padding, Task as Command};
 use iced_aw::menu;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
-
 use serde::{Deserialize, Serialize};
 
 mod client;
@@ -28,8 +26,7 @@ use crate::edit_time_entry::{EditTimeEntry, EditTimeEntryMessage};
 use crate::login::{LoginScreen, LoginScreenMessage};
 use crate::project::{Project, ProjectId};
 use crate::related_info::ExtendedMe;
-use crate::time_entry::CreateTimeEntry;
-use crate::time_entry::{TimeEntry, TimeEntryMessage};
+use crate::time_entry::{CreateTimeEntry, TimeEntry, TimeEntryMessage};
 use crate::workspace::{Workspace, WorkspaceId};
 
 pub fn main() -> iced::Result {
@@ -97,6 +94,8 @@ struct App {
     error: String,
 }
 
+// There's one instance of this enum at a time, no need to box
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Default)]
 enum Screen {
     #[default]
@@ -109,7 +108,7 @@ enum Screen {
 
 #[derive(Debug, Clone)]
 enum Message {
-    Loaded(Result<Box<State>, LoadError>),
+    Loaded(Result<Box<State>, StatePersistenceError>),
     DataFetched(Result<ExtendedMe, String>),
     LoginProxy(LoginScreenMessage),
     TimeEntryProxy(TimeEntryMessage),
@@ -225,7 +224,7 @@ impl App {
                     return Command::future(Self::load_everything(api_token));
                 }
                 Message::Loaded(Err(e)) => {
-                    error!("Failed to load state file: {e:?}");
+                    error!("Failed to load state file: {e}");
                     self.screen = Screen::Unauthed(LoginScreen::new());
                 }
                 _ => {}
@@ -618,9 +617,8 @@ impl App {
     }
 
     fn subscription(&self) -> iced::Subscription<Message> {
-        use iced::keyboard::{
-            key::Named as NamedKey, on_key_press, Key, Modifiers,
-        };
+        use iced::keyboard::key::Named as NamedKey;
+        use iced::keyboard::{on_key_press, Key, Modifiers};
         iced::Subscription::batch(vec![
             iced::time::every(std::time::Duration::from_secs(1))
                 .map(|_| Message::Tick),
@@ -672,16 +670,19 @@ fn running_entry_input(description: &str) -> Element<'_, Message> {
 }
 
 #[derive(Debug, Clone)]
-enum LoadError {
-    File,
+enum StatePersistenceError {
+    FileSystem,
     Format,
 }
 
-#[derive(Debug, Clone)]
-enum SaveError {
-    File,
-    Write,
-    Format,
+impl std::fmt::Display for StatePersistenceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let msg = match self {
+            Self::FileSystem => "Failed to read/write a state file.",
+            Self::Format => "State file format not recognized.",
+        };
+        msg.fmt(f)
+    }
 }
 
 impl State {
@@ -698,48 +699,47 @@ impl State {
         path
     }
 
-    async fn load() -> Result<Box<Self>, LoadError> {
+    async fn load() -> Result<Box<Self>, StatePersistenceError> {
         use async_std::prelude::*;
 
         let mut contents = String::new();
 
         let mut file = async_std::fs::File::open(Self::path())
             .await
-            .map_err(|_| LoadError::File)?;
+            .map_err(|_| StatePersistenceError::FileSystem)?;
 
         file.read_to_string(&mut contents)
             .await
-            .map_err(|_| LoadError::File)?;
+            .map_err(|_| StatePersistenceError::FileSystem)?;
 
-        serde_json::from_str(&contents).map_err(|_| LoadError::Format)
+        serde_json::from_str(&contents)
+            .map_err(|_| StatePersistenceError::Format)
     }
 
-    async fn save(self) -> Result<(), SaveError> {
+    async fn save(self) -> Result<(), StatePersistenceError> {
+        // This takes ownership for easier async saving
         use async_std::prelude::*;
 
         let json = serde_json::to_string_pretty(&self)
-            .map_err(|_| SaveError::Format)?;
+            .map_err(|_| StatePersistenceError::Format)?;
 
         let path = Self::path();
 
         if let Some(dir) = path.parent() {
             async_std::fs::create_dir_all(dir)
                 .await
-                .map_err(|_| SaveError::File)?;
+                .map_err(|_| StatePersistenceError::FileSystem)?;
         }
 
         {
             let mut file = async_std::fs::File::create(path)
                 .await
-                .map_err(|_| SaveError::File)?;
+                .map_err(|_| StatePersistenceError::FileSystem)?;
 
             file.write_all(json.as_bytes())
                 .await
-                .map_err(|_| SaveError::Write)?;
+                .map_err(|_| StatePersistenceError::FileSystem)?;
         }
-
-        // This is a simple way to save at most once every couple seconds
-        async_std::task::sleep(std::time::Duration::from_secs(2)).await;
 
         Ok(())
     }

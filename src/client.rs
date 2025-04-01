@@ -1,6 +1,8 @@
-use base64::{engine::general_purpose::STANDARD, Engine as _};
-use log::{error, info};
 use std::ops::{Deref, DerefMut};
+
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine as _;
+use log::{error, info};
 use surf::middleware::{Middleware, Next};
 pub use surf::Result;
 use surf::{Request, Response};

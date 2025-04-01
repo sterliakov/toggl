@@ -1,11 +1,10 @@
-use crate::{
-    client::{Client, Result as NetResult},
-    project::Project,
-    time_entry::TimeEntry,
-    workspace::Workspace,
-};
 use log::debug;
 use serde::{Deserialize, Serialize};
+
+use crate::client::{Client, Result as NetResult};
+use crate::project::Project;
+use crate::time_entry::TimeEntry;
+use crate::workspace::Workspace;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExtendedMe {
@@ -19,10 +18,10 @@ impl ExtendedMe {
     pub async fn load(client: &Client) -> NetResult<Self> {
         debug!("Fetching profile and related objects...");
         let mut rsp = client
-            .get(
-                [Client::BASE_URL, "/api/v9/me?with_related_data=true"]
-                    .join(""),
-            )
+            .get(format!(
+                "{}/api/v9/me?with_related_data=true",
+                Client::BASE_URL
+            ))
             .send()
             .await?;
         Client::check_status(&mut rsp).await?;
