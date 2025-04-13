@@ -8,8 +8,6 @@ repos:
       - id: check-merge-conflict
       - id: check-executables-have-shebangs
       - id: check-shebang-scripts-are-executable
-        # Rust attributes look like shebangs:)
-        exclude: \.rs$
       - id: check-symlinks
       - id: mixed-line-ending
         args: [--fix=lf]
@@ -36,6 +34,9 @@ repos:
     rev: 0.33.0
     hooks:
       - id: check-github-workflows
+      - id: check-jsonschema
+        args: [--check-metaschema]
+        files: ^renovate.json$
 
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.7
