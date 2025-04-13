@@ -1,4 +1,7 @@
-use components::menu_button;
+use clap::{crate_version, Parser};
+use components::{
+    menu_select_item, menu_text, menu_text_disabled, top_level_menu_text,
+};
 use customization::{Customization, CustomizationMessage};
 use iced::widget::{
     button, center, column, container, horizontal_rule, row, scrollable, text,
@@ -11,6 +14,7 @@ use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 
+mod cli;
 mod client;
 mod components;
 mod customization;
@@ -21,6 +25,7 @@ mod related_info;
 mod time_entry;
 mod workspace;
 
+use crate::cli::CliArgs;
 use crate::client::Client;
 use crate::edit_time_entry::{EditTimeEntry, EditTimeEntryMessage};
 use crate::login::{LoginScreen, LoginScreenMessage};
@@ -31,6 +36,7 @@ use crate::workspace::{Workspace, WorkspaceId};
 
 pub fn main() -> iced::Result {
     env_logger::init();
+    CliArgs::parse();
     iced::application(App::title, App::update, App::view)
         .subscription(App::subscription)
         .window_size((500.0, 600.0))
@@ -511,14 +517,10 @@ impl App {
                 .workspaces
                 .iter()
                 .map(|ws| {
-                    menu::Item::new(
-                        button(text(ws.name.clone()))
-                            .width(iced::Length::Fill)
-                            .on_press_maybe(if selected_ws == Some(ws.id) {
-                                None
-                            } else {
-                                Some(Message::SelectWorkspace(ws.id))
-                            }),
+                    menu_select_item(
+                        ws.name.clone(),
+                        selected_ws == Some(ws.id),
+                        Message::SelectWorkspace(ws.id),
                     )
                 })
                 .collect(),
@@ -527,26 +529,16 @@ impl App {
 
         let selected_project = self.state.default_project;
         let project_menu = menu::Menu::new(
-            std::iter::once(
-                menu::Item::<Message, iced::Theme, iced::Renderer>::new(
-                    button("None").width(iced::Length::Fill).on_press_maybe(
-                        if selected_project.is_none() {
-                            None
-                        } else {
-                            Some(Message::SelectProject(None))
-                        },
-                    ),
-                ),
-            )
+            std::iter::once(menu_select_item(
+                "None",
+                selected_project.is_none(),
+                Message::SelectProject(None),
+            ))
             .chain(self.state.projects.iter().map(|p| {
-                menu::Item::new(
-                    button(text(p.name.clone()))
-                        .width(iced::Length::Fill)
-                        .on_press_maybe(if selected_project == Some(p.id) {
-                            None
-                        } else {
-                            Some(Message::SelectProject(Some(p.id)))
-                        }),
+                menu_select_item(
+                    &p.name,
+                    selected_project == Some(p.id),
+                    Message::SelectProject(Some(p.id)),
                 )
             }))
             .collect(),
@@ -555,17 +547,28 @@ impl App {
 
         menu::MenuBar::new(vec![
             menu::Item::with_menu(
-                menu_button("Info", Message::Discarded)
-                    .width(iced::Length::Fixed(40f32)),
+                top_level_menu_text("Info", Message::Discarded),
                 menu::Menu::new(vec![
-                    menu::Item::new(menu_button("Reload", Message::Reload)),
+                    menu::Item::new(menu_text("Reload", Message::Reload)),
                     menu::Item::with_menu(
-                        menu_button("Workspaces", Message::Discarded),
+                        menu_text("Workspaces", Message::Discarded),
                         ws_menu,
                     ),
                     menu::Item::with_menu(
-                        menu_button("Projects", Message::Discarded),
+                        menu_text("Projects", Message::Discarded),
                         project_menu,
+                    ),
+                    menu::Item::new(
+                        menu_text_disabled(format!(
+                            "Version: {}",
+                            crate_version!()
+                        ))
+                        .padding(iced::Padding {
+                            left: 4.0,
+                            right: 4.0,
+                            top: 6.0,
+                            bottom: 4.0,
+                        }),
                     ),
                 ])
                 .max_width(120.0),

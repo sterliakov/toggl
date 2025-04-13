@@ -2,6 +2,7 @@
 async-std = "1.13.0"
 base64 = "0.22.1"
 chrono = {version = "0.4.38", features = ["serde", "unstable-locales"]}
+clap = {version = "4.5.36", features = ["cargo", "derive"]}
 directories-next = "2.0.0"
 env_logger = "0.11.5"
 iced = {version = "0.13.1", features = ["async-std", "debug", "advanced", "image"]}
@@ -19,9 +20,10 @@ sys-locale = "0.3.1"
 async-std = {version = "1.13.0", features = ["attributes"]}
 
 [package]
+description = "A simple GUI for Toggl tracker API that runs on any platform."
 edition = "2021"
 name = "toggl-tracker"
-version = "0.1.0"
+version = "0.1.3"
 
 [profile.release]
 lto = true

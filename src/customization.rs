@@ -1,10 +1,9 @@
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone};
-use iced::widget::{button, text};
 use iced::Task as Command;
 use iced_aw::menu;
 use serde::{Deserialize, Serialize};
 
-use crate::components::menu_button;
+use crate::components::{menu_select_item, menu_text, top_level_menu_text};
 
 trait LocaleString {
     fn to_format_string(&self) -> String;
@@ -147,21 +146,20 @@ impl Customization {
         wrapper: &'a impl Fn(CustomizationMessage) -> T,
     ) -> menu::Item<'a, T, iced::Theme, iced::Renderer> {
         menu::Item::with_menu(
-            menu_button(
+            top_level_menu_text(
                 "Customization",
                 wrapper(CustomizationMessage::Discarded),
-            )
-            .width(iced::Length::Fixed(140f32)),
+            ),
             menu::Menu::new(vec![
                 menu::Item::with_menu(
-                    menu_button(
+                    menu_text(
                         "Time format",
                         wrapper(CustomizationMessage::Discarded),
                     ),
                     self.time_format_menu(wrapper),
                 ),
                 menu::Item::with_menu(
-                    menu_button(
+                    menu_text(
                         "Date format",
                         wrapper(CustomizationMessage::Discarded),
                     ),
@@ -180,16 +178,10 @@ impl Customization {
             TimeFormat::VALUES
                 .iter()
                 .map(|f| {
-                    menu::Item::new(
-                        button(text(f.to_string()))
-                            .width(iced::Length::Fill)
-                            .on_press_maybe(if self.time_format == *f {
-                                None
-                            } else {
-                                Some(wrapper(
-                                    CustomizationMessage::SelectTimeFormat(*f),
-                                ))
-                            }),
+                    menu_select_item(
+                        f,
+                        self.time_format == *f,
+                        wrapper(CustomizationMessage::SelectTimeFormat(*f)),
                     )
                 })
                 .collect(),
@@ -205,16 +197,10 @@ impl Customization {
             DateFormat::VALUES
                 .iter()
                 .map(|f| {
-                    menu::Item::new(
-                        button(text(f.to_string()))
-                            .width(iced::Length::Fill)
-                            .on_press_maybe(if self.date_format == *f {
-                                None
-                            } else {
-                                Some(wrapper(
-                                    CustomizationMessage::SelectDateFormat(*f),
-                                ))
-                            }),
+                    menu_select_item(
+                        f,
+                        self.date_format == *f,
+                        wrapper(CustomizationMessage::SelectDateFormat(*f)),
                     )
                 })
                 .collect(),
