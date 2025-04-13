@@ -1,3 +1,4 @@
+use clap::Parser;
 use components::menu_button;
 use customization::{Customization, CustomizationMessage};
 use iced::widget::{
@@ -11,6 +12,7 @@ use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 
+mod cli;
 mod client;
 mod components;
 mod customization;
@@ -21,6 +23,7 @@ mod related_info;
 mod time_entry;
 mod workspace;
 
+use crate::cli::CliArgs;
 use crate::client::Client;
 use crate::edit_time_entry::{EditTimeEntry, EditTimeEntryMessage};
 use crate::login::{LoginScreen, LoginScreenMessage};
@@ -31,6 +34,7 @@ use crate::workspace::{Workspace, WorkspaceId};
 
 pub fn main() -> iced::Result {
     env_logger::init();
+    CliArgs::parse();
     iced::application(App::title, App::update, App::view)
         .subscription(App::subscription)
         .window_size((500.0, 600.0))
