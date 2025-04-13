@@ -2,7 +2,7 @@
 async-std = "1.13.0"
 base64 = "0.22.1"
 chrono = {version = "0.4.38", features = ["serde", "unstable-locales"]}
-clap = {version = "4.5.36", features = ["derive"]}
+clap = {version = "4.5.36", features = ["cargo", "derive"]}
 directories-next = "2.0.0"
 env_logger = "0.11.5"
 iced = {version = "0.13.1", features = ["async-std", "debug", "advanced", "image"]}
