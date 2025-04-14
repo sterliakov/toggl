@@ -255,12 +255,7 @@ impl TimeEntry {
                     container(project.project_badge()),
                 ]
                 .align_x(Horizontal::Right)
-                .padding(iced::Padding {
-                    left: 0.0,
-                    bottom: 4.0,
-                    right: 0.0,
-                    top: 4.0
-                }),
+                .padding([4, 0]),
                 icon_button(iced_fonts::Bootstrap::Pause)
                     .style(button::primary)
                     .on_press(TimeEntryMessage::StopRunning)
