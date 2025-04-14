@@ -243,15 +243,17 @@ impl TimeEntry {
                     .on_press(TimeEntryMessage::EditRunning)
                     .clip(true),
                 text(self.duration_string()).width(Length::Fixed(50f32)),
-                button("Stop")
+                icon_button(iced_fonts::Bootstrap::Pause)
                     .style(button::primary)
                     .on_press(TimeEntryMessage::StopRunning)
-                    .width(Length::Fixed(50f32)),
+                    .width(Length::Fixed(28f32)),
             ]
             .spacing(10)
             .padding(iced::Padding {
-                right: 10f32,
-                ..iced::Padding::default()
+                right: 10.0,
+                top: 4.0,
+                bottom: 4.0,
+                left: 0.0,
             })
             .align_y(Vertical::Center),
         )
