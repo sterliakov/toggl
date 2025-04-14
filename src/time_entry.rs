@@ -211,7 +211,7 @@ impl TimeEntry {
                         self.clone()
                     )))
                     .width(Length::Shrink),
-                text(self.duration_string()).width(Length::Fixed(60f32))
+                text(self.duration_string()).width(Length::Fixed(50f32))
             ]
             .spacing(10)
             .padding(iced::Padding {
@@ -241,11 +241,11 @@ impl TimeEntry {
                     })
                     .on_press(TimeEntryMessage::EditRunning)
                     .clip(true),
-                text(self.duration_string()).width(Length::Fixed(60f32)),
+                text(self.duration_string()).width(Length::Fixed(50f32)),
                 button("Stop")
                     .style(button::primary)
                     .on_press(TimeEntryMessage::StopRunning)
-                    .width(Length::Fixed(60f32)),
+                    .width(Length::Fixed(50f32)),
             ]
             .spacing(10)
             .padding(iced::Padding {
