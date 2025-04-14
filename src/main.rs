@@ -489,9 +489,9 @@ impl App {
                     None => running_entry_input(
                         &temp_state.new_running_entry_description,
                     ),
-                    Some(entry) => {
-                        entry.view_running().map(Message::TimeEntryProxy)
-                    }
+                    Some(entry) => entry
+                        .view_running(&self.state.projects)
+                        .map(Message::TimeEntryProxy),
                 };
                 let content = column(
                     self.state
