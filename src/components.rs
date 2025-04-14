@@ -1,6 +1,9 @@
+use iced::alignment::Horizontal;
 use iced::widget::button::Status;
 use iced::widget::{button, text};
 use iced_aw::menu;
+use iced_fonts::bootstrap::{icon_to_string, Bootstrap};
+use iced_fonts::BOOTSTRAP_FONT;
 
 fn menu_button<'a, T>(
     content: impl ToString,
@@ -48,4 +51,20 @@ pub fn top_level_menu_text<'a, T>(
     message: T,
 ) -> button::Button<'a, T, iced::Theme, iced::Renderer> {
     menu_text(content, message).width(iced::Length::Shrink)
+}
+
+pub fn icon_text<'a>(
+    icon: Bootstrap,
+) -> text::Text<'a, iced::Theme, iced::Renderer> {
+    text(icon_to_string(icon)).font(BOOTSTRAP_FONT)
+}
+
+pub fn icon_button<'a, T>(
+    icon: Bootstrap,
+) -> button::Button<'a, T, iced::Theme, iced::Renderer> {
+    button(
+        icon_text(icon)
+            .align_x(Horizontal::Center)
+            .width(iced::Length::Fill),
+    )
 }

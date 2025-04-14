@@ -1,21 +1,26 @@
+use iced::alignment::Horizontal;
+use iced::keyboard::key::Named as NamedKey;
 use iced::widget::{
     button, column, container, pick_list, row, scrollable, text, text_editor,
-    text_input,
 };
-use iced::{Element, Fill, Length, Right, Task as Command};
+use iced::{keyboard, Element, Fill, Length, Task as Command};
+use iced_fonts::bootstrap::Bootstrap;
 
 use crate::client::Client;
+use crate::components::icon_text;
 use crate::customization::Customization;
 use crate::project::{MaybeProject, Project};
 use crate::time_entry::TimeEntry;
+use crate::utils::ExactModifiers;
+use crate::widgets::date_time_widget::{DateTimeEditMessage, DateTimeWidget};
 
 #[derive(Debug)]
 pub struct EditTimeEntry {
     entry: TimeEntry,
     api_token: String,
     description_content: text_editor::Content,
-    start_text: String,
-    stop_text: String,
+    start_dt: DateTimeWidget,
+    stop_dt: DateTimeWidget,
     error: Option<String>,
     projects: Vec<MaybeProject>,
     selected_project: MaybeProject,
@@ -25,8 +30,8 @@ pub struct EditTimeEntry {
 pub enum EditTimeEntryMessage {
     DescriptionEdited(text_editor::Action),
     ProjectSelected(MaybeProject),
-    StartEdited(String),
-    StopEdited(String),
+    StartEdited(DateTimeEditMessage),
+    StopEdited(DateTimeEditMessage),
     Submit,
     Delete,
     Abort,
@@ -42,8 +47,18 @@ impl EditTimeEntry {
         projects: Vec<Project>,
     ) -> Self {
         let description = entry.description.clone();
-        let start_text = customization.format_datetime(&Some(entry.start));
-        let stop_text = customization.format_datetime(&entry.stop);
+        let start_dt = DateTimeWidget::new(
+            Some(entry.start),
+            "Start",
+            "start-input",
+            customization,
+        );
+        let stop_dt = DateTimeWidget::new(
+            entry.stop,
+            "Stop",
+            "stop-input",
+            customization,
+        );
         let selected_project = projects
             .iter()
             .find(|p| Some(p.id) == entry.project_id)
@@ -54,30 +69,75 @@ impl EditTimeEntry {
             description_content: text_editor::Content::with_text(
                 &description.unwrap_or("".to_string()),
             ),
-            start_text,
-            stop_text,
+            start_dt,
+            stop_dt,
             error: None,
             projects: projects.into_iter().map(|p| p.into()).collect(),
             selected_project: selected_project.into(),
         }
     }
 
-    pub fn view(&self) -> Element<EditTimeEntryMessage> {
+    pub fn view(
+        &self,
+        customization: &Customization,
+    ) -> Element<EditTimeEntryMessage> {
         let content = column![
-            column![button("X")
+            container(
+                button(
+                    icon_text(Bootstrap::X)
+                        .size(24)
+                        .width(iced::Length::Shrink)
+                )
                 .on_press(EditTimeEntryMessage::Abort)
-                .style(button::text),]
-            .align_x(Right)
-            .width(Fill),
+                .style(button::text)
+            )
+            .align_x(Horizontal::Right)
+            .width(iced::Length::Fill),
             text_editor(&self.description_content)
-                .on_action(EditTimeEntryMessage::DescriptionEdited),
+                .on_action(EditTimeEntryMessage::DescriptionEdited)
+                .key_binding(|press| {
+                    use text_editor::{Binding, Motion};
+
+                    match press.key.as_ref() {
+                        keyboard::Key::Named(NamedKey::Backspace)
+                        | keyboard::Key::Character("w")
+                            if press.modifiers.is_exact_ctrl_or_cmd() =>
+                        {
+                            Some(Binding::Sequence(vec![
+                                Binding::SelectWord,
+                                Binding::Backspace,
+                                Binding::Backspace, // Preceding whitespace if any
+                            ]))
+                        }
+                        keyboard::Key::Named(NamedKey::Delete)
+                            if press.modifiers.is_exact_ctrl_or_cmd() =>
+                        {
+                            Some(Binding::Sequence(vec![
+                                Binding::Select(Motion::WordRight),
+                                Binding::Delete,
+                            ]))
+                        }
+                        keyboard::Key::Character("e")
+                            if press.modifiers.is_exact_ctrl_or_cmd() =>
+                        {
+                            Some(Binding::Move(Motion::DocumentEnd))
+                        }
+                        // Propagate Ctrl+Enter up
+                        keyboard::Key::Named(NamedKey::Enter)
+                            if press.modifiers.is_exact_ctrl_or_cmd() =>
+                        {
+                            None
+                        }
+                        _ => Binding::from_key_press(press),
+                    }
+                }),
             row![
-                text_input("Start", &self.start_text)
-                    .id("start-input")
-                    .on_input(EditTimeEntryMessage::StartEdited),
-                text_input("Stop", &self.stop_text)
-                    .id("end-input")
-                    .on_input(EditTimeEntryMessage::StopEdited),
+                self.start_dt
+                    .view(customization)
+                    .map(EditTimeEntryMessage::StartEdited),
+                self.stop_dt
+                    .view(customization)
+                    .map(EditTimeEntryMessage::StopEdited),
             ]
             .spacing(20),
             pick_list(
@@ -86,7 +146,19 @@ impl EditTimeEntry {
                     .collect::<Vec<_>>(),
                 Some(self.selected_project.clone()),
                 EditTimeEntryMessage::ProjectSelected
-            ),
+            )
+            .style(|theme, status| {
+                let base = pick_list::default(theme, status);
+                pick_list::Style {
+                    background: match &self.selected_project {
+                        MaybeProject::Some(p) => iced::Color::parse(&p.color)
+                            .expect("Must be a valid color")
+                            .into(),
+                        MaybeProject::None => base.background,
+                    },
+                    ..base
+                }
+            }),
             row![
                 button("Save")
                     .on_press(EditTimeEntryMessage::Submit)
@@ -102,7 +174,7 @@ impl EditTimeEntry {
         .push_maybe(self.error.clone().map(|e| text(e).style(text::danger)))
         .spacing(10);
 
-        scrollable(container(content).center_x(Fill).padding(40)).into()
+        scrollable(container(content).center_x(Fill).padding(10)).into()
     }
 
     pub fn update(
@@ -116,10 +188,16 @@ impl EditTimeEntry {
                 self.entry.description = Some(self.description_content.text());
             }
             EditTimeEntryMessage::StartEdited(start) => {
-                self.start_text = start;
+                return self
+                    .start_dt
+                    .update(start, customization)
+                    .map(EditTimeEntryMessage::StartEdited)
             }
             EditTimeEntryMessage::StopEdited(stop) => {
-                self.stop_text = stop;
+                return self
+                    .stop_dt
+                    .update(stop, customization)
+                    .map(EditTimeEntryMessage::StartEdited)
             }
             EditTimeEntryMessage::ProjectSelected(p) => {
                 self.entry.project_id = match &p {
@@ -129,11 +207,9 @@ impl EditTimeEntry {
                 self.selected_project = p;
             }
             EditTimeEntryMessage::Submit => {
-                match customization.parse_datetime(&self.start_text) {
-                    Err(_) => {
-                        return Command::done(EditTimeEntryMessage::Error(
-                            format!("Invalid start date: {}", self.start_text),
-                        ))
+                match self.start_dt.get_value() {
+                    Err(e) => {
+                        return Command::done(EditTimeEntryMessage::Error(e))
                     }
                     Ok(None) => {
                         return Command::done(EditTimeEntryMessage::Error(
@@ -142,13 +218,11 @@ impl EditTimeEntry {
                     }
                     Ok(Some(date)) => self.entry.start = date,
                 };
-                if let Ok(date) = customization.parse_datetime(&self.stop_text)
-                {
-                    self.entry.stop = date;
-                } else {
-                    return Command::done(EditTimeEntryMessage::Error(
-                        format!("Invalid end date: {}", self.stop_text),
-                    ));
+                match self.stop_dt.get_value() {
+                    Ok(stop) => self.entry.stop = stop,
+                    Err(e) => {
+                        return Command::done(EditTimeEntryMessage::Error(e));
+                    }
                 };
                 let duration = self
                     .entry
@@ -178,6 +252,24 @@ impl EditTimeEntry {
             }
         };
         Command::none()
+    }
+
+    pub fn handle_key(
+        &mut self,
+        key: NamedKey,
+        modifiers: keyboard::Modifiers,
+    ) -> Option<Command<EditTimeEntryMessage>> {
+        if let Some(c) = self.start_dt.handle_key(key) {
+            Some(c.map(EditTimeEntryMessage::StartEdited))
+        } else if let Some(c) = self.stop_dt.handle_key(key) {
+            Some(c.map(EditTimeEntryMessage::StopEdited))
+        } else if matches!(key, NamedKey::Enter)
+            && modifiers.is_exact_ctrl_or_cmd()
+        {
+            Some(Command::done(EditTimeEntryMessage::Submit))
+        } else {
+            None
+        }
     }
 
     async fn submit(

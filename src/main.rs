@@ -3,17 +3,20 @@ use components::{
     menu_select_item, menu_text, menu_text_disabled, top_level_menu_text,
 };
 use customization::{Customization, CustomizationMessage};
+use iced::keyboard::key::Named as NamedKey;
 use iced::widget::{
     button, center, column, container, horizontal_rule, row, scrollable, text,
     text_input,
 };
-use iced::{window, Center, Color, Element, Fill, Padding, Task as Command};
+use iced::{
+    keyboard, window, Center, Color, Element, Fill, Padding, Task as Command,
+};
 use iced_aw::menu;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
-use utils::duration_to_hms;
+use utils::{duration_to_hms, ExactModifiers};
 
 mod cli;
 mod client;
@@ -25,6 +28,7 @@ mod project;
 mod related_info;
 mod time_entry;
 mod utils;
+mod widgets;
 mod workspace;
 
 use crate::cli::CliArgs;
@@ -44,6 +48,10 @@ pub fn main() -> iced::Result {
         .window_size((400.0, 600.0))
         .settings(iced::Settings {
             default_text_size: 14.into(),
+            fonts: vec![
+                iced_fonts::BOOTSTRAP_FONT_BYTES.into(),
+                iced_fonts::REQUIRED_FONT_BYTES.into(),
+            ],
             ..iced::Settings::default()
         })
         .run_with(App::new)
@@ -139,6 +147,7 @@ enum Message {
     SelectProject(Option<ProjectId>),
     TabPressed(bool),
     EscPressed,
+    EnterPressed(keyboard::Modifiers),
 }
 
 lazy_static! {
@@ -437,8 +446,26 @@ impl App {
                     self.screen = Screen::Loading;
                     return Command::perform(State::load(), Message::Loaded);
                 }
-                Message::EscPressed
-                | Message::EditTimeEntryProxy(EditTimeEntryMessage::Abort) => {
+                Message::EscPressed => {
+                    return screen
+                        .handle_key(
+                            NamedKey::Escape,
+                            keyboard::Modifiers::empty(),
+                        )
+                        .map(|c| c.map(Message::EditTimeEntryProxy))
+                        .unwrap_or_else(|| {
+                            self.screen =
+                                Screen::Loaded(TemporaryState::default());
+                            Command::none()
+                        })
+                }
+                Message::EnterPressed(m) => {
+                    return screen
+                        .handle_key(NamedKey::Enter, m)
+                        .unwrap_or_else(Command::none)
+                        .map(Message::EditTimeEntryProxy)
+                }
+                Message::EditTimeEntryProxy(EditTimeEntryMessage::Abort) => {
                     self.screen = Screen::Loaded(TemporaryState::default())
                 }
                 Message::EditTimeEntryProxy(msg) => {
@@ -510,9 +537,9 @@ impl App {
                 .center_x(Fill)
                 .into()
             }
-            Screen::EditEntry(screen) => {
-                screen.view().map(Message::EditTimeEntryProxy)
-            }
+            Screen::EditEntry(screen) => screen
+                .view(&self.state.customization)
+                .map(Message::EditTimeEntryProxy),
         }
     }
 
@@ -649,8 +676,7 @@ impl App {
     }
 
     fn subscription(&self) -> iced::Subscription<Message> {
-        use iced::keyboard::key::Named as NamedKey;
-        use iced::keyboard::{on_key_press, Key, Modifiers};
+        use iced::keyboard::{on_key_press, Key};
         iced::Subscription::batch(vec![
             iced::time::every(std::time::Duration::from_secs(1))
                 .map(|_| Message::Tick),
@@ -659,18 +685,19 @@ impl App {
                     return None;
                 };
                 match (key, modifiers) {
-                    (NamedKey::Tab, _) => {
-                        if modifiers.bits() == 0 {
+                    (NamedKey::Tab, m) => {
+                        if m.is_empty() {
                             Some(Message::TabPressed(false))
-                        } else if modifiers == Modifiers::SHIFT {
+                        } else if m.shift() && m.is_exact() {
                             Some(Message::TabPressed(true))
                         } else {
                             None
                         }
                     }
-                    (NamedKey::Escape, _) if modifiers.bits() == 0 => {
+                    (NamedKey::Escape, m) if m.is_empty() => {
                         Some(Message::EscPressed)
                     }
+                    (NamedKey::Enter, m) => Some(Message::EnterPressed(m)),
                     _ => None,
                 }
             }),
