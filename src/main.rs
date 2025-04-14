@@ -25,6 +25,7 @@ mod project;
 mod related_info;
 mod time_entry;
 mod utils;
+mod widgets;
 mod workspace;
 
 use crate::cli::CliArgs;
@@ -41,9 +42,13 @@ pub fn main() -> iced::Result {
     CliArgs::parse();
     iced::application(App::title, App::update, App::view)
         .subscription(App::subscription)
-        .window_size((400.0, 600.0))
+        .window_size((500.0, 600.0))
         .settings(iced::Settings {
             default_text_size: 14.into(),
+            fonts: vec![
+                iced_fonts::BOOTSTRAP_FONT_BYTES.into(),
+                iced_fonts::REQUIRED_FONT_BYTES.into(),
+            ],
             ..iced::Settings::default()
         })
         .run_with(App::new)
@@ -437,8 +442,12 @@ impl App {
                     self.screen = Screen::Loading;
                     return Command::perform(State::load(), Message::Loaded);
                 }
-                Message::EscPressed
-                | Message::EditTimeEntryProxy(EditTimeEntryMessage::Abort) => {
+                Message::EscPressed => {
+                    if !screen.forward_esc() {
+                        self.screen = Screen::Loaded(TemporaryState::default())
+                    }
+                }
+                Message::EditTimeEntryProxy(EditTimeEntryMessage::Abort) => {
                     self.screen = Screen::Loaded(TemporaryState::default())
                 }
                 Message::EditTimeEntryProxy(msg) => {
@@ -510,9 +519,9 @@ impl App {
                 .center_x(Fill)
                 .into()
             }
-            Screen::EditEntry(screen) => {
-                screen.view().map(Message::EditTimeEntryProxy)
-            }
+            Screen::EditEntry(screen) => screen
+                .view(&self.state.customization)
+                .map(Message::EditTimeEntryProxy),
         }
     }
 

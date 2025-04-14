@@ -111,6 +111,13 @@ impl Customization {
                 .map_err(|e| e.to_string())?;
         Ok(Some(Local.from_local_datetime(&naive).unwrap()))
     }
+
+    pub fn use_24h(&self) -> bool {
+        match self.time_format {
+            TimeFormat::H12 => false,
+            TimeFormat::H24 => true,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
