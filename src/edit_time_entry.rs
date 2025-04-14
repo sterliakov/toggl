@@ -146,7 +146,19 @@ impl EditTimeEntry {
                     .collect::<Vec<_>>(),
                 Some(self.selected_project.clone()),
                 EditTimeEntryMessage::ProjectSelected
-            ),
+            )
+            .style(|theme, status| {
+                let base = pick_list::default(theme, status);
+                pick_list::Style {
+                    background: match &self.selected_project {
+                        MaybeProject::Some(p) => iced::Color::parse(&p.color)
+                            .expect("Must be a valid color")
+                            .into(),
+                        MaybeProject::None => base.background,
+                    },
+                    ..base
+                }
+            }),
             row![
                 button("Save")
                     .on_press(EditTimeEntryMessage::Submit)
