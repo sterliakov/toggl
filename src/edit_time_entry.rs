@@ -96,7 +96,7 @@ impl EditTimeEntry {
             text_editor(&self.description_content)
                 .on_action(EditTimeEntryMessage::DescriptionEdited)
                 .key_binding(|press| {
-                    use text_editor::Binding;
+                    use text_editor::{Binding, Motion};
 
                     match press.key.as_ref() {
                         keyboard::Key::Named(NamedKey::Backspace)
@@ -105,8 +105,22 @@ impl EditTimeEntry {
                         {
                             Some(Binding::Sequence(vec![
                                 Binding::SelectWord,
+                                Binding::Backspace,
+                                Binding::Backspace, // Preceding whitespace if any
+                            ]))
+                        }
+                        keyboard::Key::Named(NamedKey::Delete)
+                            if press.modifiers.is_exact_ctrl_or_cmd() =>
+                        {
+                            Some(Binding::Sequence(vec![
+                                Binding::Select(Motion::WordRight),
                                 Binding::Delete,
                             ]))
+                        }
+                        keyboard::Key::Character("e")
+                            if press.modifiers.is_exact_ctrl_or_cmd() =>
+                        {
+                            Some(Binding::Move(Motion::DocumentEnd))
                         }
                         // Propagate Ctrl+Enter up
                         keyboard::Key::Named(NamedKey::Enter)
