@@ -1,8 +1,9 @@
 use iced::alignment::Horizontal;
+use iced::keyboard::key::Named as NamedKey;
 use iced::widget::{
     button, column, container, pick_list, row, scrollable, text, text_editor,
 };
-use iced::{Element, Fill, Length, Task as Command};
+use iced::{keyboard, Element, Fill, Length, Task as Command};
 use iced_fonts::bootstrap::Bootstrap;
 
 use crate::client::Client;
@@ -10,6 +11,7 @@ use crate::components::icon_text;
 use crate::customization::Customization;
 use crate::project::{MaybeProject, Project};
 use crate::time_entry::TimeEntry;
+use crate::utils::ExactModifiers;
 use crate::widgets::date_time_widget::{DateTimeEditMessage, DateTimeWidget};
 
 #[derive(Debug)]
@@ -92,7 +94,28 @@ impl EditTimeEntry {
             .align_x(Horizontal::Right)
             .width(iced::Length::Fill),
             text_editor(&self.description_content)
-                .on_action(EditTimeEntryMessage::DescriptionEdited),
+                .on_action(EditTimeEntryMessage::DescriptionEdited)
+                .key_binding(|press| {
+                    use text_editor::Binding;
+
+                    match press.key {
+                        keyboard::Key::Named(NamedKey::Backspace)
+                            if press.modifiers.is_exact_ctrl_or_cmd() =>
+                        {
+                            Some(Binding::Sequence(vec![
+                                Binding::SelectWord,
+                                Binding::Delete,
+                            ]))
+                        }
+                        keyboard::Key::Named(NamedKey::Enter)
+                            if press.modifiers.is_exact_ctrl_or_cmd() =>
+                        {
+                            // Propagate Ctrl+Enter up
+                            None
+                        }
+                        _ => Binding::from_key_press(press),
+                    }
+                }),
             row![
                 self.start_dt
                     .view(customization)
@@ -138,10 +161,16 @@ impl EditTimeEntry {
                 self.entry.description = Some(self.description_content.text());
             }
             EditTimeEntryMessage::StartEdited(start) => {
-                self.start_dt.update(start, customization);
+                return self
+                    .start_dt
+                    .update(start, customization)
+                    .map(EditTimeEntryMessage::StartEdited)
             }
             EditTimeEntryMessage::StopEdited(stop) => {
-                self.stop_dt.update(stop, customization);
+                return self
+                    .stop_dt
+                    .update(stop, customization)
+                    .map(EditTimeEntryMessage::StartEdited)
             }
             EditTimeEntryMessage::ProjectSelected(p) => {
                 self.entry.project_id = match &p {
@@ -151,7 +180,7 @@ impl EditTimeEntry {
                 self.selected_project = p;
             }
             EditTimeEntryMessage::Submit => {
-                match self.start_dt.get_value(customization) {
+                match self.start_dt.get_value() {
                     Err(e) => {
                         return Command::done(EditTimeEntryMessage::Error(e))
                     }
@@ -162,7 +191,7 @@ impl EditTimeEntry {
                     }
                     Ok(Some(date)) => self.entry.start = date,
                 };
-                match self.stop_dt.get_value(customization) {
+                match self.stop_dt.get_value() {
                     Ok(stop) => self.entry.stop = stop,
                     Err(e) => {
                         return Command::done(EditTimeEntryMessage::Error(e));
@@ -198,14 +227,23 @@ impl EditTimeEntry {
         Command::none()
     }
 
-    pub fn forward_esc(&mut self) -> bool {
-        if self.start_dt.handle_esc() {
-            return true;
+    pub fn handle_key(
+        &mut self,
+        key: NamedKey,
+        modifiers: keyboard::Modifiers,
+    ) -> Option<Command<EditTimeEntryMessage>> {
+        if let Some(c) = self.start_dt.handle_key(key) {
+            Some(c.map(EditTimeEntryMessage::StartEdited))
+        } else if let Some(c) = self.stop_dt.handle_key(key) {
+            Some(c.map(EditTimeEntryMessage::StopEdited))
+        } else if matches!(key, NamedKey::Enter)
+            && (modifiers.control() || modifiers.macos_command())
+            && modifiers.bits().count_ones() == 1
+        {
+            Some(Command::done(EditTimeEntryMessage::Submit))
+        } else {
+            None
         }
-        if self.stop_dt.handle_esc() {
-            return true;
-        }
-        false
     }
 
     async fn submit(
