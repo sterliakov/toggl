@@ -1,13 +1,13 @@
-use chrono::{DateTime, Duration, Local};
+use chrono::{DateTime, Local};
 use iced::alignment::Vertical;
 use iced::widget::{button, column, container, row, text};
 use iced::{Color, Element, Length};
-use iced_aw::badge;
 use log::debug;
 use serde::{Deserialize, Serialize, Serializer};
 
 use crate::client::{Client, Result as NetResult};
-use crate::project::{Project, ProjectId};
+use crate::project::{MaybeProject, Project, ProjectId};
+use crate::utils::duration_to_hms;
 use crate::workspace::WorkspaceId;
 
 fn datetime_serialize_utc<S: Serializer>(
@@ -188,31 +188,22 @@ pub enum TimeEntryMessage {
 
 impl TimeEntry {
     pub fn view(&self, projects: &[Project]) -> Element<TimeEntryMessage> {
-        let project = projects.iter().find(|p| Some(p.id) == self.project_id);
+        let project: MaybeProject = projects
+            .iter()
+            .find(|p| Some(p.id) == self.project_id)
+            .cloned()
+            .into();
         let name = self
             .description
             .clone()
             .unwrap_or("<NO DESCRIPTION>".to_string());
-        let project_badge = if let Some(project) = project {
-            let color = Color::parse(&project.color)
-                .expect("Project color must be valid");
-            badge::Badge::new(text(project.name.clone()).size(12)).style(
-                move |_, _| badge::Style {
-                    background: color.into(),
-                    ..badge::Style::default()
-                },
-            )
-        } else {
-            badge(text("No project".to_string()).size(12))
-                .style(iced_aw::style::badge::light)
-        };
         button(
             row![
                 column![
                     text(name)
                         .width(Length::Fill)
                         .wrapping(text::Wrapping::None),
-                    project_badge
+                    project.project_badge()
                 ],
                 button("+")
                     .style(button::primary)
@@ -270,14 +261,6 @@ impl TimeEntry {
         })
         .into()
     }
-}
-
-fn duration_to_hms(duration: &Duration) -> String {
-    let total_seconds = duration.num_seconds();
-    let seconds = total_seconds % 60;
-    let minutes = (total_seconds / 60) % 60;
-    let hours = (total_seconds / 60) / 60;
-    format!("{}:{:0>2}:{:0>2}", hours, minutes, seconds)
 }
 
 #[cfg(test)]

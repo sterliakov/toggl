@@ -13,6 +13,7 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
+use utils::duration_to_hms;
 
 mod cli;
 mod client;
@@ -23,6 +24,7 @@ mod login;
 mod project;
 mod related_info;
 mod time_entry;
+mod utils;
 mod workspace;
 
 use crate::cli::CliArgs;
@@ -583,30 +585,53 @@ impl App {
         start: chrono::NaiveDate,
         tasks: impl Iterator<Item = &'a TimeEntry>,
     ) -> Element<'a, Message> {
-        column(
-            std::iter::once(
-                container(
-                    text(self.state.customization.format_date(&start))
-                        .style(text::success),
-                )
-                .padding(Padding {
-                    left: 10f32,
-                    ..Padding::default()
-                })
-                .style(|_| container::Style {
-                    background: Some(iced::color!(0xc8c8c8).into()),
-                    ..container::Style::default()
-                })
-                .width(iced::Length::Fill)
-                .into(),
-            )
-            .chain(tasks.flat_map(|task| {
+        let mut total = 0i64;
+        let tasks_rendered: Vec<_> = tasks
+            .inspect(|task| total += task.duration)
+            .flat_map(|task| {
                 vec![
                     task.view(&self.state.projects)
                         .map(Message::TimeEntryProxy),
                     horizontal_rule(0.5).into(),
                 ]
-            })),
+            })
+            .collect();
+        const TOP_OFFSET: f32 = 8.0;
+        let summary_container_style = |theme: &iced::Theme| {
+            let color = theme.extended_palette().secondary.weak;
+            container::Style {
+                background: Some(color.color.into()),
+                text_color: Some(color.text),
+                ..container::Style::default()
+            }
+        };
+        column(
+            std::iter::once(
+                row!(
+                    container(text(
+                        self.state.customization.format_date(&start)
+                    ))
+                    .align_left(iced::Length::Shrink)
+                    .padding(Padding {
+                        left: 10.0,
+                        top: TOP_OFFSET,
+                        ..Padding::default()
+                    })
+                    .style(summary_container_style),
+                    container(text(duration_to_hms(
+                        &chrono::Duration::seconds(total)
+                    )))
+                    .align_right(iced::Length::Fill)
+                    .padding(Padding {
+                        right: 20.0,
+                        top: TOP_OFFSET,
+                        ..Padding::default()
+                    })
+                    .style(summary_container_style)
+                )
+                .into(),
+            )
+            .chain(tasks_rendered),
         )
         .into()
     }

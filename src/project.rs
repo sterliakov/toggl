@@ -1,3 +1,5 @@
+use iced::widget::text;
+use iced_aw::{badge, Badge};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -58,6 +60,26 @@ impl From<MaybeProject> for Option<Project> {
         match val {
             MaybeProject::Some(p) => Some(p),
             MaybeProject::None => None,
+        }
+    }
+}
+
+impl MaybeProject {
+    pub fn project_badge<'a, T>(
+        &self,
+    ) -> Badge<'a, T, iced::Theme, iced::Renderer> {
+        if let Self::Some(project) = self {
+            let color = iced::Color::parse(&project.color)
+                .expect("Project color must be valid");
+            Badge::new(text(project.name.clone()).size(12)).style(
+                move |_, _| badge::Style {
+                    background: color.into(),
+                    ..badge::Style::default()
+                },
+            )
+        } else {
+            badge(text("No project".to_string()).size(12))
+                .style(iced_aw::style::badge::light)
         }
     }
 }
