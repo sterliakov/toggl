@@ -6,6 +6,7 @@ use log::debug;
 use serde::{Deserialize, Serialize, Serializer};
 
 use crate::client::{Client, Result as NetResult};
+use crate::components::icon_button;
 use crate::project::{MaybeProject, Project, ProjectId};
 use crate::utils::duration_to_hms;
 use crate::workspace::WorkspaceId;
@@ -205,12 +206,12 @@ impl TimeEntry {
                         .wrapping(text::Wrapping::None),
                     project.project_badge()
                 ],
-                button("+")
+                icon_button(iced_fonts::Bootstrap::Copy)
                     .style(button::primary)
                     .on_press_with(|| TimeEntryMessage::Duplicate(Box::new(
                         self.clone()
                     )))
-                    .width(Length::Shrink),
+                    .width(28),
                 text(self.duration_string()).width(Length::Fixed(50f32))
             ]
             .spacing(10)
