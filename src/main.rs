@@ -619,8 +619,7 @@ impl App {
                     })
                     .style(summary_container_style),
                     container(text(duration_to_hms(
-                        &chrono::Duration::new(total, 0)
-                            .expect("Must be valid duration")
+                        &chrono::Duration::seconds(total)
                     )))
                     .align_right(iced::Length::Fill)
                     .padding(Padding {
