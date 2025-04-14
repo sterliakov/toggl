@@ -98,8 +98,9 @@ impl EditTimeEntry {
                 .key_binding(|press| {
                     use text_editor::Binding;
 
-                    match press.key {
+                    match press.key.as_ref() {
                         keyboard::Key::Named(NamedKey::Backspace)
+                        | keyboard::Key::Character("w")
                             if press.modifiers.is_exact_ctrl_or_cmd() =>
                         {
                             Some(Binding::Sequence(vec![
@@ -107,10 +108,10 @@ impl EditTimeEntry {
                                 Binding::Delete,
                             ]))
                         }
+                        // Propagate Ctrl+Enter up
                         keyboard::Key::Named(NamedKey::Enter)
                             if press.modifiers.is_exact_ctrl_or_cmd() =>
                         {
-                            // Propagate Ctrl+Enter up
                             None
                         }
                         _ => Binding::from_key_press(press),
@@ -237,8 +238,7 @@ impl EditTimeEntry {
         } else if let Some(c) = self.stop_dt.handle_key(key) {
             Some(c.map(EditTimeEntryMessage::StopEdited))
         } else if matches!(key, NamedKey::Enter)
-            && (modifiers.control() || modifiers.macos_command())
-            && modifiers.bits().count_ones() == 1
+            && modifiers.is_exact_ctrl_or_cmd()
         {
             Some(Command::done(EditTimeEntryMessage::Submit))
         } else {
