@@ -45,7 +45,7 @@ pub fn main() -> iced::Result {
     CliArgs::parse();
     iced::application(App::title, App::update, App::view)
         .subscription(App::subscription)
-        .window_size((500.0, 600.0))
+        .window_size((400.0, 600.0))
         .settings(iced::Settings {
             default_text_size: 14.into(),
             fonts: vec![

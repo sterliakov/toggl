@@ -162,7 +162,7 @@ impl EditTimeEntry {
         .push_maybe(self.error.clone().map(|e| text(e).style(text::danger)))
         .spacing(10);
 
-        scrollable(container(content).center_x(Fill).padding(40)).into()
+        scrollable(container(content).center_x(Fill).padding(10)).into()
     }
 
     pub fn update(
