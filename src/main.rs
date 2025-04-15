@@ -223,8 +223,7 @@ impl App {
                 };
                 self.state = self.state.clone().update_from_context(state);
                 return Command::batch(vec![
-                    Command::future(self.state.clone().save())
-                        .map(|_| Message::Discarded),
+                    self.save_state(),
                     self.update_icon(),
                 ]);
             }
@@ -266,10 +265,9 @@ impl App {
                         api_token: api_token.clone(),
                         ..State::default()
                     };
-                    return Command::perform(self.state.clone().save(), |_| {
-                        Message::Discarded
-                    })
-                    .chain(Command::future(Self::load_everything(api_token)));
+                    return self.save_state().chain(Command::future(
+                        Self::load_everything(api_token),
+                    ));
                 }
                 Message::LoginProxy(msg) => {
                     return screen.update(msg).map(Message::LoginProxy)
@@ -350,9 +348,7 @@ impl App {
                     });
                 }
                 Message::CustomizationProxy(CustomizationMessage::Save) => {
-                    return Command::perform(self.state.clone().save(), |_| {
-                        Message::Discarded
-                    });
+                    return self.save_state();
                 }
                 Message::CustomizationProxy(msg) => {
                     return self
@@ -419,28 +415,20 @@ impl App {
                             Some(e.workspace_id) == self.state.default_workspace
                         },
                     ));
-                    return Command::perform(self.state.clone().save(), |_| {
-                        Message::Discarded
-                    });
+                    return self.save_state();
                 }
                 Message::Reload => {
                     debug!("Syncing with remote...");
                     *temp_state = TemporaryState::default();
-                    return Command::future(Self::load_everything(
-                        self.state.api_token.clone(),
-                    ));
+                    return self.load_entries();
                 }
                 Message::SelectWorkspace(ws_id) => {
                     self.state.default_workspace = Some(ws_id);
-                    return Command::future(Self::load_everything(
-                        self.state.api_token.clone(),
-                    ));
+                    return self.load_entries();
                 }
                 Message::SelectProject(project_id) => {
                     self.state.default_project = project_id;
-                    return Command::perform(self.state.clone().save(), |_| {
-                        Message::Discarded
-                    });
+                    return self.save_state();
                 }
                 Message::SetUpdateStep(step) => {
                     temp_state.update_step = step;
@@ -489,6 +477,14 @@ impl App {
             },
         };
         Command::none()
+    }
+
+    fn save_state(&self) -> Command<Message> {
+        Command::future(self.state.clone().save()).map(|_| Message::Discarded)
+    }
+
+    fn load_entries(&self) -> Command<Message> {
+        Command::future(Self::load_everything(self.state.api_token.clone()))
     }
 
     fn view(&self) -> Element<Message> {
