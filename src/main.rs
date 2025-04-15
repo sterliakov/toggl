@@ -6,7 +6,7 @@ use customization::{Customization, CustomizationMessage};
 use iced::keyboard::key::Named as NamedKey;
 use iced::widget::{
     button, center, column, container, horizontal_rule, row, scrollable, text,
-    text_input, Button,
+    text_input,
 };
 use iced::{
     keyboard, window, Center, Color, Element, Fill, Padding, Task as Command,
@@ -16,7 +16,7 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
-use updater::{update, UpdateStatus};
+use updater::UpdateStep;
 use utils::{duration_to_hms, ExactModifiers};
 
 mod cli;
@@ -111,16 +111,6 @@ struct TemporaryState {
     update_step: UpdateStep,
 }
 
-#[derive(Clone, Debug, Default)]
-enum UpdateStep {
-    #[default]
-    NotStarted,
-    Started,
-    UpToDate,
-    Success,
-    Error,
-}
-
 #[derive(Debug, Default)]
 struct App {
     state: State,
@@ -163,7 +153,6 @@ enum Message {
     TabPressed(bool),
     EscPressed,
     EnterPressed(keyboard::Modifiers),
-    RunSelfUpdate,
     SetUpdateStep(UpdateStep),
 }
 
@@ -330,7 +319,7 @@ impl App {
                                     Message::Error(e.to_string())
                                 }
                                 Ok(_) => {
-                                    info!("Entry stopped.");
+                                    debug!("Entry stopped.");
                                     Message::Reload
                                 }
                             }
@@ -354,7 +343,7 @@ impl App {
                                 Message::Error(e.to_string())
                             }
                             Ok(_) => {
-                                info!("Entry duplicated.");
+                                debug!("Entry duplicated.");
                                 Message::Reload
                             }
                         }
@@ -399,7 +388,7 @@ impl App {
                                 Message::Error(e.to_string())
                             }
                             Ok(_) => {
-                                info!("Entry created.");
+                                debug!("Entry created.");
                                 Message::Reload
                             }
                         }
@@ -419,10 +408,11 @@ impl App {
                     });
                 }
                 Message::LoadedMore(entries) => {
-                    info!("Loaded older entries.");
                     if entries.is_empty() {
-                        debug!("No older entries.");
+                        info!("No older entries found.");
                         self.state.has_more_entries = false;
+                    } else {
+                        info!("Loaded older entries.");
                     }
                     self.state.time_entries.extend(entries.into_iter().filter(
                         |e| {
@@ -434,21 +424,19 @@ impl App {
                     });
                 }
                 Message::Reload => {
-                    info!("Syncing with remote...");
+                    debug!("Syncing with remote...");
                     *temp_state = TemporaryState::default();
                     return Command::future(Self::load_everything(
                         self.state.api_token.clone(),
                     ));
                 }
                 Message::SelectWorkspace(ws_id) => {
-                    info!("Selected workspace: {ws_id}");
                     self.state.default_workspace = Some(ws_id);
                     return Command::future(Self::load_everything(
                         self.state.api_token.clone(),
                     ));
                 }
                 Message::SelectProject(project_id) => {
-                    info!("Selected project: {project_id:?}");
                     self.state.default_project = project_id;
                     return Command::perform(self.state.clone().save(), |_| {
                         Message::Discarded
@@ -456,26 +444,10 @@ impl App {
                 }
                 Message::SetUpdateStep(step) => {
                     temp_state.update_step = step;
-                }
-                Message::RunSelfUpdate => {
-                    info!("Scheduled self-update");
-                    temp_state.update_step = UpdateStep::Started;
-                    return Command::future(async {
-                        match update(false).await {
-                            Err(err) => {
-                                error!("Failed to update: {err}.");
-                                Message::SetUpdateStep(UpdateStep::Error)
-                            }
-                            Ok(UpdateStatus::UpToDate(version)) => {
-                                info!("toggl-track {version} is up to date.");
-                                Message::SetUpdateStep(UpdateStep::UpToDate)
-                            }
-                            Ok(UpdateStatus::Updated(version)) => {
-                                info!("toggl-track updated to {version}.");
-                                Message::SetUpdateStep(UpdateStep::Success)
-                            }
-                        }
-                    });
+                    return temp_state
+                        .update_step
+                        .transition()
+                        .map(Message::SetUpdateStep);
                 }
                 _ => {}
             },
@@ -643,37 +615,22 @@ impl App {
                             bottom: 4.0,
                         }),
                     ),
-                    menu::Item::new(self.update_menu()),
+                    menu::Item::new(
+                        if let Screen::Loaded(state) = &self.screen {
+                            iced::Element::from(state.update_step.view())
+                                .map(Message::SetUpdateStep)
+                        } else {
+                            unreachable!(
+                                "menu is only present at the loaded screen"
+                            )
+                        },
+                    ),
                 ])
                 .max_width(120.0),
             ),
             self.state.customization.view(&Message::CustomizationProxy),
         ])
         .into()
-    }
-
-    fn update_menu(&self) -> Button<Message, iced::Theme, iced::Renderer> {
-        let Screen::Loaded(state) = &self.screen else {
-            unreachable!()
-        };
-        match state.update_step {
-            UpdateStep::NotStarted => {
-                menu_text("Check for updates", Message::RunSelfUpdate)
-            }
-            UpdateStep::Started => {
-                menu_text_disabled("Checking for updates...")
-            }
-            UpdateStep::UpToDate => {
-                menu_text_disabled("Up to date.").style(button::success)
-            }
-            UpdateStep::Success => {
-                menu_text_disabled("Updated, please restart the application.")
-                    .style(button::success)
-            }
-            UpdateStep::Error => {
-                menu_text_disabled("Failed to update.").style(button::danger)
-            }
-        }
     }
 
     fn day_group<'a>(
