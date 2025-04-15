@@ -12,7 +12,9 @@ pub struct CliArgs {
 #[derive(Debug, Default, Subcommand)]
 pub enum SubCommand {
     #[default]
+    #[clap(about = "Launch the GUI")]
     Start,
+    #[clap(about = "Update the application")]
     SelfUpdate,
 }
 
@@ -22,8 +24,8 @@ impl CliArgs {
         async_std::task::block_on(self.run_internal())
     }
     async fn run_internal(&self) -> Option<()> {
-        match self.subcommand {
-            Some(SubCommand::SelfUpdate) => {
+        match self.subcommand.as_ref().unwrap_or(&SubCommand::default()) {
+            SubCommand::SelfUpdate => {
                 match update(true).await {
                     Err(err) => {
                         eprintln!("Failed to update: {err}.");
@@ -37,7 +39,7 @@ impl CliArgs {
                 };
                 Some(())
             }
-            Some(SubCommand::Start) | None => None,
+            SubCommand::Start => None,
         }
     }
 }
