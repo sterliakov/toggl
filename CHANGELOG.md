@@ -1,4 +1,4 @@
-## 0.2.0
+## 0.2.0-beta.0
 
 * feat: improved top menu bar behaviour
 * feat: added daily display of total tracked time

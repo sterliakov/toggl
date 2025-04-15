@@ -26,7 +26,7 @@ edition = "2021"
 homepage = "https://github.com/sterliakov/toggl-tracker"
 name = "toggl-tracker"
 repository = "https://github.com/sterliakov/toggl-tracker"
-version = "0.1.3"
+version = "0.2.0-beta.0"
 
 [profile.release]
 lto = true
