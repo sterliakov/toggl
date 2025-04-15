@@ -1,5 +1,5 @@
 use chrono::{DateTime, Local};
-use iced::alignment::Vertical;
+use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{button, column, container, row, text};
 use iced::{Color, Element, Length};
 use log::debug;
@@ -227,7 +227,15 @@ impl TimeEntry {
         .into()
     }
 
-    pub fn view_running(&self) -> Element<TimeEntryMessage> {
+    pub fn view_running(
+        &self,
+        projects: &[Project],
+    ) -> Element<TimeEntryMessage> {
+        let project: MaybeProject = projects
+            .iter()
+            .find(|p| Some(p.id) == self.project_id)
+            .cloned()
+            .into();
         let name = self
             .description
             .clone()
@@ -242,11 +250,16 @@ impl TimeEntry {
                     })
                     .on_press(TimeEntryMessage::EditRunning)
                     .clip(true),
-                text(self.duration_string()).width(Length::Fixed(50f32)),
+                column![
+                    text(self.duration_string()).width(Length::Fixed(50f32)),
+                    container(project.project_badge()),
+                ]
+                .align_x(Horizontal::Right)
+                .padding([4, 0]),
                 icon_button(iced_fonts::Bootstrap::Pause)
                     .style(button::primary)
                     .on_press(TimeEntryMessage::StopRunning)
-                    .width(Length::Fixed(28f32)),
+                    .width(Length::Fixed(28.0)),
             ]
             .spacing(10)
             .padding(iced::Padding {
