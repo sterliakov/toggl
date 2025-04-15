@@ -16,6 +16,7 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
+use updater::UpdateStep;
 use utils::{duration_to_hms, ExactModifiers};
 
 mod cli;
@@ -27,6 +28,7 @@ mod login;
 mod project;
 mod related_info;
 mod time_entry;
+mod updater;
 mod utils;
 mod widgets;
 mod workspace;
@@ -42,7 +44,9 @@ use crate::workspace::{Workspace, WorkspaceId};
 
 pub fn main() -> iced::Result {
     env_logger::init();
-    CliArgs::parse();
+    if CliArgs::parse().run().is_some() {
+        return Ok(());
+    }
     iced::application(App::title, App::update, App::view)
         .subscription(App::subscription)
         .window_size((400.0, 600.0))
@@ -104,6 +108,7 @@ impl State {
 #[derive(Debug, Default)]
 struct TemporaryState {
     new_running_entry_description: String,
+    update_step: UpdateStep,
 }
 
 #[derive(Debug, Default)]
@@ -148,6 +153,7 @@ enum Message {
     TabPressed(bool),
     EscPressed,
     EnterPressed(keyboard::Modifiers),
+    SetUpdateStep(UpdateStep),
 }
 
 lazy_static! {
@@ -217,8 +223,7 @@ impl App {
                 };
                 self.state = self.state.clone().update_from_context(state);
                 return Command::batch(vec![
-                    Command::future(self.state.clone().save())
-                        .map(|_| Message::Discarded),
+                    self.save_state(),
                     self.update_icon(),
                 ]);
             }
@@ -260,10 +265,9 @@ impl App {
                         api_token: api_token.clone(),
                         ..State::default()
                     };
-                    return Command::perform(self.state.clone().save(), |_| {
-                        Message::Discarded
-                    })
-                    .chain(Command::future(Self::load_everything(api_token)));
+                    return self.save_state().chain(Command::future(
+                        Self::load_everything(api_token),
+                    ));
                 }
                 Message::LoginProxy(msg) => {
                     return screen.update(msg).map(Message::LoginProxy)
@@ -313,7 +317,7 @@ impl App {
                                     Message::Error(e.to_string())
                                 }
                                 Ok(_) => {
-                                    info!("Entry stopped.");
+                                    debug!("Entry stopped.");
                                     Message::Reload
                                 }
                             }
@@ -337,16 +341,14 @@ impl App {
                                 Message::Error(e.to_string())
                             }
                             Ok(_) => {
-                                info!("Entry duplicated.");
+                                debug!("Entry duplicated.");
                                 Message::Reload
                             }
                         }
                     });
                 }
                 Message::CustomizationProxy(CustomizationMessage::Save) => {
-                    return Command::perform(self.state.clone().save(), |_| {
-                        Message::Discarded
-                    });
+                    return self.save_state();
                 }
                 Message::CustomizationProxy(msg) => {
                     return self
@@ -382,7 +384,7 @@ impl App {
                                 Message::Error(e.to_string())
                             }
                             Ok(_) => {
-                                info!("Entry created.");
+                                debug!("Entry created.");
                                 Message::Reload
                             }
                         }
@@ -402,40 +404,38 @@ impl App {
                     });
                 }
                 Message::LoadedMore(entries) => {
-                    info!("Loaded older entries.");
                     if entries.is_empty() {
-                        debug!("No older entries.");
+                        info!("No older entries found.");
                         self.state.has_more_entries = false;
+                    } else {
+                        info!("Loaded older entries.");
                     }
                     self.state.time_entries.extend(entries.into_iter().filter(
                         |e| {
                             Some(e.workspace_id) == self.state.default_workspace
                         },
                     ));
-                    return Command::perform(self.state.clone().save(), |_| {
-                        Message::Discarded
-                    });
+                    return self.save_state();
                 }
                 Message::Reload => {
-                    info!("Syncing with remote...");
+                    debug!("Syncing with remote...");
                     *temp_state = TemporaryState::default();
-                    return Command::future(Self::load_everything(
-                        self.state.api_token.clone(),
-                    ));
+                    return self.load_entries();
                 }
                 Message::SelectWorkspace(ws_id) => {
-                    info!("Selected workspace: {ws_id}");
                     self.state.default_workspace = Some(ws_id);
-                    return Command::future(Self::load_everything(
-                        self.state.api_token.clone(),
-                    ));
+                    return self.load_entries();
                 }
                 Message::SelectProject(project_id) => {
-                    info!("Selected project: {project_id:?}");
                     self.state.default_project = project_id;
-                    return Command::perform(self.state.clone().save(), |_| {
-                        Message::Discarded
-                    });
+                    return self.save_state();
+                }
+                Message::SetUpdateStep(step) => {
+                    temp_state.update_step = step;
+                    return temp_state
+                        .update_step
+                        .transition()
+                        .map(Message::SetUpdateStep);
                 }
                 _ => {}
             },
@@ -477,6 +477,14 @@ impl App {
             },
         };
         Command::none()
+    }
+
+    fn save_state(&self) -> Command<Message> {
+        Command::future(self.state.clone().save()).map(|_| Message::Discarded)
+    }
+
+    fn load_entries(&self) -> Command<Message> {
+        Command::future(Self::load_everything(self.state.api_token.clone()))
     }
 
     fn view(&self) -> Element<Message> {
@@ -602,6 +610,16 @@ impl App {
                             top: 6.0,
                             bottom: 4.0,
                         }),
+                    ),
+                    menu::Item::new(
+                        if let Screen::Loaded(state) = &self.screen {
+                            iced::Element::from(state.update_step.view())
+                                .map(Message::SetUpdateStep)
+                        } else {
+                            unreachable!(
+                                "menu is only present at the loaded screen"
+                            )
+                        },
                     ),
                 ])
                 .max_width(120.0),
