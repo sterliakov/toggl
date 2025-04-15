@@ -1,7 +1,4 @@
 use clap::{crate_version, Parser};
-use components::{
-    menu_select_item, menu_text, menu_text_disabled, top_level_menu_text,
-};
 use customization::{Customization, CustomizationMessage};
 use iced::keyboard::key::Named as NamedKey;
 use iced::widget::{
@@ -21,7 +18,6 @@ use utils::{duration_to_hms, ExactModifiers};
 
 mod cli;
 mod client;
-mod components;
 mod customization;
 mod edit_time_entry;
 mod login;
@@ -40,6 +36,9 @@ use crate::login::{LoginScreen, LoginScreenMessage};
 use crate::project::{Project, ProjectId};
 use crate::related_info::ExtendedMe;
 use crate::time_entry::{CreateTimeEntry, TimeEntry, TimeEntryMessage};
+use crate::widgets::{
+    menu_select_item, menu_text, menu_text_disabled, top_level_menu_text,
+};
 use crate::workspace::{Workspace, WorkspaceId};
 
 pub fn main() -> iced::Result {

@@ -7,12 +7,11 @@ use iced::{keyboard, Element, Fill, Length, Task as Command};
 use iced_fonts::bootstrap::Bootstrap;
 
 use crate::client::Client;
-use crate::components::icon_text;
 use crate::customization::Customization;
 use crate::project::{MaybeProject, Project};
 use crate::time_entry::TimeEntry;
 use crate::utils::ExactModifiers;
-use crate::widgets::date_time_widget::{DateTimeEditMessage, DateTimeWidget};
+use crate::widgets::{icon_text, DateTimeEditMessage, DateTimeWidget};
 
 #[derive(Debug)]
 pub struct EditTimeEntry {

@@ -6,9 +6,9 @@ use log::debug;
 use serde::{Deserialize, Serialize, Serializer};
 
 use crate::client::{Client, Result as NetResult};
-use crate::components::icon_button;
 use crate::project::{MaybeProject, Project, ProjectId};
 use crate::utils::duration_to_hms;
+use crate::widgets::icon_button;
 use crate::workspace::WorkspaceId;
 
 fn datetime_serialize_utc<S: Serializer>(
