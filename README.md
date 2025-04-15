@@ -71,7 +71,7 @@ If you are fine with grabbing random binaries from the internet, just go to the
 location is on your `PATH`. Here's an example:
 
 ```bash
-wget https://github.com/sterliakov/toggl/releases/download/v0.1.0/toggl-tracker-x86_64-unknown-linux-gnu.tar.gz
+wget https://github.com/sterliakov/toggl/releases/latest/download/toggl-tracker-x86_64-unknown-linux-gnu.tar.gz
 tar xzf toggl-tracker-x86_64-unknown-linux-gnu.tar.gz
 ./toggl-tracker
 ```
