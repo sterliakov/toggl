@@ -5,7 +5,7 @@ permissions:
 
 on:
   push:
-    tags: ['*']
+    tags: [v*]
 
 jobs:
   create-release:
@@ -16,6 +16,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/setup-python@v5
+
+      - name: check tag vs cargo version
+        run: |
+          pip install yq
+          tag_version=${GITHUB_REF#refs/tags/v}
+          cargo_version=$(tomlq -r '.package.version' Cargo.toml)
+          if [[ "$tag_version" != "$cargo_version" ]]; then
+            printf '::error::Version mismatch: tag for %s, cargo %s' "$tag_version" "$cargo_version"
+            exit 1
+          fi
       - uses: taiki-e/create-gh-release-action@v1      # zizmor: ignore[ref-confusion]
         id: create-release
         with:
