@@ -1,6 +1,14 @@
 # Toggl Track client
 
+[![Licence](https://img.shields.io/github/license/Ileriayo/markdown-badges)](./LICENSE)
+[![Build](https://github.com/sterliakov/toggl/actions/workflows/ci.yaml/badge.svg?event=push)](https://github.com/sterliakov/toggl/actions/workflows/ci.yaml?query=event%3Apush)
 [![Renovate enabled](https://img.shields.io/badge/renovate-enabled-brightgreen.svg)](https://renovatebot.com/)
+[![GitHub Release](https://img.shields.io/github/v/release/sterliakov/toggl)](https://github.com/sterliakov/toggl/releases/latest)
+
+<!--
+[![Crates.io Version](https://img.shields.io/crates/v/toggl-tracker)](https://crates.io/crates/toggl-tracker)
+[![NPM Version](https://img.shields.io/npm/v/%40sterliakov%2Ftoggl-tracker)](https://www.npmjs.com/package/@sterliakov/toggl-tracker)
+-->
 
 ## Disclaimer
 
@@ -30,17 +38,45 @@ This app is built with [iced](https://github.com/iced-rs/iced) framework.
 
 ## Installation
 
+<!--
+### NPM
+
+This app is packaged on `npm` under umbrella package that should resolve
+itself for all supported platforms:
+
+```bash
+npm i -g @sterliakov/toggl-tracker
+```
+
+### Cargo
+
+This app is also published at [crates.io](https://crates.io/crates/toggl-tracker),
+so you can build with cargo:
+
+```bash
+cargo install toggl-tracker
+```
+
+Or get a pre-built binary with amazing [`cargo-binstall`](https://github.com/cargo-bins/cargo-binstall):
+
+```bash
+cargo binstall toggl-tracker
+```
+-->
+
+### Just get a binary
+
 If you are fine with grabbing random binaries from the internet, just go to the
 [Releases] page, take the binary for your arch & platform and copy to whatever
 location is on your `PATH`. Here's an example:
 
 ```bash
-wget https://github.com/sterliakov/toggl/releases/download/v0.1.0/toggl-tracker-x86_64-unknown-linux-gnu.tar.gz
+wget https://github.com/sterliakov/toggl/releases/latest/download/toggl-tracker-x86_64-unknown-linux-gnu.tar.gz
 tar xzf toggl-tracker-x86_64-unknown-linux-gnu.tar.gz
 ./toggl-tracker
 ```
 
-To build from source:
+### Build from source
 
 ```bash
 cd "$(mktemp -d)"
