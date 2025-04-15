@@ -21,11 +21,16 @@ sys-locale = "0.3.1"
 async-std = {version = "1.13.0", features = ["attributes"]}
 
 [package]
+categories = ["gui"]
 description = "A simple GUI for Toggl tracker API that runs on any platform."
 edition = "2021"
-homepage = "https://github.com/sterliakov/toggl-tracker"
+homepage = "https://github.com/sterliakov/toggl"
+include = ["src", "assets", "LICENSE", "README.md"]
+keywords = ["time-tracker", "toggl"]
+license = "MIT"
 name = "toggl-tracker"
-repository = "https://github.com/sterliakov/toggl-tracker"
+readme = "README.md"
+repository = "https://github.com/sterliakov/toggl"
 version = "0.2.0-beta.0"
 
 [profile.release]
