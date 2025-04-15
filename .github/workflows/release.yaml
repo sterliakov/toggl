@@ -96,7 +96,7 @@ jobs:
       - name: Publish to NPM
         shell: bash
         run: |
-          cd npm
+          cd npm/sub
 
           target="${{ matrix.node_pair }}"
           export node_os=${target%-*}
@@ -108,14 +108,13 @@ jobs:
           else
             bin="target/${{ matrix.target }}/release/toggl-tracker"
           fi
+          mkdir bin
+          cp "../../$bin" ./bin/
 
-          mkdir -p "${node_pkg}/bin"
-          envsubst <package.json.sub.tmpl >"${node_pkg}/package.json"
-          cp "../$bin" "${node_pkg}/bin"
-          cp ../README.md "${node_pkg}"
-          cp ../LICENSE "${node_pkg}"
+          cp ../../LICENSE .
+          envsubst <package.json.tmpl >package.json
+          rm package.json.tmpl
 
-          cd "${node_pkg}"
           npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -137,10 +136,12 @@ jobs:
       - name: Publish the package
         shell: bash
         run: |
-          cp README.md npm/app
-          cp LICENSE npm/app
-          cd npm/app
+          cd npm/main
+          cp ../../README.md ./
+          cp ../../LICENSE ./
           envsubst <package.json.tmpl >package.json
+          rm package.json.tmpl
+
           npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
