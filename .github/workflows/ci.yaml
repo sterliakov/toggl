@@ -27,3 +27,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Ensure it builds
         run: cargo build
+
+      - uses: taiki-e/install-action@parse-changelog
+      - name: Check CHANGELOG
+        run: |
+          parse-changelog CHANGELOG.md

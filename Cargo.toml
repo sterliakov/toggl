@@ -23,8 +23,15 @@ async-std = {version = "1.13.0", features = ["attributes"]}
 [package]
 description = "A simple GUI for Toggl tracker API that runs on any platform."
 edition = "2021"
+homepage = "https://github.com/sterliakov/toggl-tracker"
 name = "toggl-tracker"
+repository = "https://github.com/sterliakov/toggl-tracker"
 version = "0.1.3"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
 
 [profile.release]
 lto = true
