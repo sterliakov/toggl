@@ -6,7 +6,7 @@ use customization::{Customization, CustomizationMessage};
 use iced::keyboard::key::Named as NamedKey;
 use iced::widget::{
     button, center, column, container, horizontal_rule, row, scrollable, text,
-    text_input,
+    text_input, Button,
 };
 use iced::{
     keyboard, window, Center, Color, Element, Fill, Padding, Task as Command,
@@ -16,6 +16,7 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
+use updater::{update, UpdateStatus};
 use utils::{duration_to_hms, ExactModifiers};
 
 mod cli;
@@ -27,6 +28,7 @@ mod login;
 mod project;
 mod related_info;
 mod time_entry;
+mod updater;
 mod utils;
 mod widgets;
 mod workspace;
@@ -42,7 +44,9 @@ use crate::workspace::{Workspace, WorkspaceId};
 
 pub fn main() -> iced::Result {
     env_logger::init();
-    CliArgs::parse();
+    if CliArgs::parse().run().is_some() {
+        return Ok(());
+    }
     iced::application(App::title, App::update, App::view)
         .subscription(App::subscription)
         .window_size((400.0, 600.0))
@@ -104,6 +108,17 @@ impl State {
 #[derive(Debug, Default)]
 struct TemporaryState {
     new_running_entry_description: String,
+    update_step: UpdateStep,
+}
+
+#[derive(Clone, Debug, Default)]
+enum UpdateStep {
+    #[default]
+    NotStarted,
+    Started,
+    UpToDate,
+    Success,
+    Error,
 }
 
 #[derive(Debug, Default)]
@@ -148,6 +163,8 @@ enum Message {
     TabPressed(bool),
     EscPressed,
     EnterPressed(keyboard::Modifiers),
+    RunSelfUpdate,
+    SetUpdateStep(UpdateStep),
 }
 
 lazy_static! {
@@ -437,6 +454,29 @@ impl App {
                         Message::Discarded
                     });
                 }
+                Message::SetUpdateStep(step) => {
+                    temp_state.update_step = step;
+                }
+                Message::RunSelfUpdate => {
+                    info!("Scheduled self-update");
+                    temp_state.update_step = UpdateStep::Started;
+                    return Command::future(async {
+                        match update(false).await {
+                            Err(err) => {
+                                error!("Failed to update: {err}.");
+                                Message::SetUpdateStep(UpdateStep::Error)
+                            }
+                            Ok(UpdateStatus::UpToDate(version)) => {
+                                info!("toggl-track {version} is up to date.");
+                                Message::SetUpdateStep(UpdateStep::UpToDate)
+                            }
+                            Ok(UpdateStatus::Updated(version)) => {
+                                info!("toggl-track updated to {version}.");
+                                Message::SetUpdateStep(UpdateStep::Success)
+                            }
+                        }
+                    });
+                }
                 _ => {}
             },
             Screen::EditEntry(screen) => match message {
@@ -603,12 +643,37 @@ impl App {
                             bottom: 4.0,
                         }),
                     ),
+                    menu::Item::new(self.update_menu()),
                 ])
                 .max_width(120.0),
             ),
             self.state.customization.view(&Message::CustomizationProxy),
         ])
         .into()
+    }
+
+    fn update_menu(&self) -> Button<Message, iced::Theme, iced::Renderer> {
+        let Screen::Loaded(state) = &self.screen else {
+            unreachable!()
+        };
+        match state.update_step {
+            UpdateStep::NotStarted => {
+                menu_text("Check for updates", Message::RunSelfUpdate)
+            }
+            UpdateStep::Started => {
+                menu_text_disabled("Checking for updates...")
+            }
+            UpdateStep::UpToDate => {
+                menu_text_disabled("Up to date.").style(button::success)
+            }
+            UpdateStep::Success => {
+                menu_text_disabled("Updated, please restart the application.")
+                    .style(button::success)
+            }
+            UpdateStep::Error => {
+                menu_text_disabled("Failed to update.").style(button::danger)
+            }
+        }
     }
 
     fn day_group<'a>(
