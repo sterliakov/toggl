@@ -12,6 +12,7 @@
 	- added support for <kbd>Ctrl+Enter</kbd> shortcut to quickly save the
 	  entry after editing
 * feat: added project badge to running entry row
+* feat: added Cargo and NPM as distribution channels
 
 ## 0.1.2
 

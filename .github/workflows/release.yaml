@@ -17,32 +17,39 @@ jobs:
         with:
           persist-credentials: false
       - uses: taiki-e/create-gh-release-action@v1      # zizmor: ignore[ref-confusion]
+        id: create-release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           changelog: CHANGELOG.md
+    outputs:
+      version: ${{ steps.create-release.outputs.version }}
 
   upload-assets:
-    needs: create-release
+    needs: [create-release]
     strategy:
       fail-fast: false
       matrix:
         include:
-          - target: aarch64-apple-darwin
-            os: macos-latest
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-          - target: arm-unknown-linux-gnueabihf
-            os: ubuntu-latest
-          - target: armv7-unknown-linux-gnueabihf
-            os: ubuntu-latest
-          - target: x86_64-apple-darwin
-            os: macos-latest
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-          - target: aarch64-pc-windows-msvc
-            os: windows-latest
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
+            node_pair: linux-x64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            node_pair: linux-arm64
+
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            node_pair: darwin-x64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            node_pair: darwin-arm64
+
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            node_pair: windows-x64
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            node_pair: windows-arm64
     permissions:
       contents: write
     runs-on: ${{ matrix.os }}
@@ -79,6 +86,59 @@ jobs:
           include: LICENSE,README.md
           target: ${{ matrix.target }}
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to NPM
+        shell: bash
+        run: |
+          cd npm
+
+          target="${{ matrix.node_pair }}"
+          export node_os=${target%-*}
+          export node_arch=${target#*-}
+          export node_pkg="@sterliakov/toggl-tracker-${{ matrix.node_pair }}"
+
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            bin="target/${{ matrix.target }}/release/toggl-tracker.exe"
+          else
+            bin="target/${{ matrix.target }}/release/toggl-tracker"
+          fi
+
+          mkdir -p "${node_pkg}/bin"
+          envsubst <package.json.sub.tmpl >"${node_pkg}/package.json"
+          cp "../$bin" "${node_pkg}/bin"
+          cp ../README.md "${node_pkg}"
+          cp ../LICENSE "${node_pkg}"
+
+          cd "${node_pkg}"
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ needs.create-release.outputs.version }}
+
+  npm_base_publish:
+    name: Publish the base NPM package
+    needs: [create-release, upload-assets]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Publish the package
+        shell: bash
+        run: |
+          cp README.md npm/app
+          cp LICENSE npm/app
+          cd npm/app
+          envsubst <package.json.tmpl >package.json
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ needs.create-release.outputs.version }}
 
   crates_io_publish:
     name: Publish (crates.io)
