@@ -29,7 +29,7 @@ use crate::screens::{
     EditTimeEntry, EditTimeEntryMessage, LoginScreen, LoginScreenMessage,
 };
 use crate::state::{State, StatePersistenceError};
-use crate::time_entry::{CreateTimeEntry, TimeEntry, TimeEntryMessage};
+use crate::time_entry::{TimeEntry, TimeEntryMessage};
 use crate::updater::UpdateStep;
 use crate::utils::{duration_to_hms, Client, ExactModifiers};
 use crate::widgets::{
@@ -235,22 +235,12 @@ impl App {
                     if let Some(entry) =
                         self.state.time_entries.iter().find(|e| e.id == i)
                     {
-                        self.screen = Screen::EditEntry(EditTimeEntry::new(
-                            entry.clone(),
-                            &self.state.api_token,
-                            &self.state.customization,
-                            self.state.projects.clone(),
-                        ));
+                        self.begin_edit(entry.clone());
                     }
                 }
                 Message::TimeEntryProxy(TimeEntryMessage::EditRunning) => {
                     if let Some(entry) = &self.state.running_entry {
-                        self.screen = Screen::EditEntry(EditTimeEntry::new(
-                            entry.clone(),
-                            &self.state.api_token,
-                            &self.state.customization,
-                            self.state.projects.clone(),
-                        ));
+                        self.begin_edit(entry.clone());
                     }
                 }
                 Message::TimeEntryProxy(TimeEntryMessage::StopRunning) => {
@@ -280,12 +270,13 @@ impl App {
                     let token = self.state.api_token.clone();
                     return Command::future(async move {
                         let client = Client::from_api_token(&token);
-                        let entry = CreateTimeEntry::new(
+                        let fut = TimeEntry::create_running(
                             e.description,
                             e.workspace_id,
                             e.project_id,
+                            &client,
                         );
-                        match entry.create(&client).await {
+                        match fut.await {
                             Err(e) => {
                                 error!("Failed to duplicate an entry: {e}");
                                 Message::Error(e.to_string())
@@ -323,12 +314,13 @@ impl App {
                     let project_id = self.state.default_project;
                     return Command::future(async move {
                         let client = Client::from_api_token(&token);
-                        let entry = CreateTimeEntry::new(
+                        let fut = TimeEntry::create_running(
                             Some(description),
                             workspace_id,
                             project_id,
+                            &client,
                         );
-                        match entry.create(&client).await {
+                        match fut.await {
                             Err(e) => {
                                 error!("Failed to create a new entry: {e}");
                                 Message::Error(e.to_string())
@@ -374,7 +366,7 @@ impl App {
                 }
                 Message::SelectWorkspace(ws_id) => {
                     self.state.default_workspace = Some(ws_id);
-                    return self.load_entries();
+                    return self.save_state().chain(self.load_entries());
                 }
                 Message::SelectProject(project_id) => {
                     self.state.default_project = project_id;
@@ -435,6 +427,15 @@ impl App {
 
     fn load_entries(&self) -> Command<Message> {
         Command::future(Self::load_everything(self.state.api_token.clone()))
+    }
+
+    fn begin_edit(&mut self, entry: TimeEntry) {
+        self.screen = Screen::EditEntry(EditTimeEntry::new(
+            entry,
+            &self.state.api_token,
+            &self.state.customization,
+            self.state.projects.clone(),
+        ));
     }
 
     fn view(&self) -> Element<Message> {

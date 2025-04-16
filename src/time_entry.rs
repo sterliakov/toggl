@@ -128,6 +128,33 @@ impl TimeEntry {
         Client::check_status(&mut res).await
     }
 
+    pub async fn create_running(
+        description: Option<String>,
+        workspace_id: WorkspaceId,
+        project_id: Option<ProjectId>,
+        client: &Client,
+    ) -> NetResult<()> {
+        debug!("Creating a time entry...");
+        let entry = CreateTimeEntry {
+            created_with: "ST-Toggl-Client".to_string(),
+            description,
+            duration: -1,
+            start: Local::now(),
+            workspace_id,
+            project_id,
+        };
+        let mut res = client
+            .post(format!(
+                "{}/api/v9/workspaces/{}/time_entries",
+                Client::BASE_URL,
+                entry.workspace_id
+            ))
+            .body_json(&entry)?
+            .send()
+            .await?;
+        Client::check_status(&mut res).await
+    }
+
     fn duration_string(&self) -> String {
         let diff = self.stop.unwrap_or_else(|| {
             Local::now().with_timezone(&self.start.timezone())
@@ -137,44 +164,14 @@ impl TimeEntry {
 }
 
 #[derive(Clone, Debug, Serialize)]
-pub struct CreateTimeEntry {
+struct CreateTimeEntry {
     created_with: String,
     description: Option<String>,
     duration: i64,
+    #[serde(serialize_with = "datetime_serialize_utc")]
     start: DateTime<Local>,
     workspace_id: WorkspaceId,
     project_id: Option<ProjectId>,
-}
-
-impl CreateTimeEntry {
-    pub fn new(
-        description: Option<String>,
-        workspace_id: WorkspaceId,
-        project_id: Option<ProjectId>,
-    ) -> Self {
-        Self {
-            created_with: "ST-Toggl-Client".to_string(),
-            description,
-            duration: -1,
-            start: Local::now(),
-            workspace_id,
-            project_id,
-        }
-    }
-
-    pub async fn create(&self, client: &Client) -> NetResult<()> {
-        debug!("Creating a time entry...");
-        let mut res = client
-            .post(format!(
-                "{}/api/v9/workspaces/{}/time_entries",
-                Client::BASE_URL,
-                self.workspace_id
-            ))
-            .body_json(&self)?
-            .send()
-            .await?;
-        Client::check_status(&mut res).await
-    }
 }
 
 #[derive(Clone, Debug)]
