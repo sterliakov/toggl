@@ -17,7 +17,6 @@ use updater::UpdateStep;
 use utils::{duration_to_hms, ExactModifiers};
 
 mod cli;
-mod client;
 mod customization;
 mod project;
 mod related_info;
@@ -29,13 +28,13 @@ mod widgets;
 mod workspace;
 
 use crate::cli::CliArgs;
-use crate::client::Client;
 use crate::project::{Project, ProjectId};
 use crate::related_info::ExtendedMe;
 use crate::screens::{
     EditTimeEntry, EditTimeEntryMessage, LoginScreen, LoginScreenMessage,
 };
 use crate::time_entry::{CreateTimeEntry, TimeEntry, TimeEntryMessage};
+use crate::utils::Client;
 use crate::widgets::{
     menu_select_item, menu_text, menu_text_disabled, top_level_menu_text,
 };

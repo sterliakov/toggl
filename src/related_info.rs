@@ -1,9 +1,9 @@
 use log::debug;
 use serde::{Deserialize, Serialize};
 
-use crate::client::{Client, Result as NetResult};
 use crate::project::Project;
 use crate::time_entry::TimeEntry;
+use crate::utils::{Client, NetResult};
 use crate::workspace::Workspace;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

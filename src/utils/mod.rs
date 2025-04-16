@@ -1,6 +1,10 @@
 use chrono::Duration;
 use iced::keyboard::Modifiers;
 
+mod client;
+
+pub use client::{Client, Result as NetResult};
+
 pub fn duration_to_hms(duration: &Duration) -> String {
     let total_seconds = duration.num_seconds();
     let seconds = total_seconds % 60;

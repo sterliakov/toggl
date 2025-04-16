@@ -5,9 +5,8 @@ use iced::{Color, Element, Length};
 use log::debug;
 use serde::{Deserialize, Serialize, Serializer};
 
-use crate::client::{Client, Result as NetResult};
 use crate::project::{MaybeProject, Project, ProjectId};
-use crate::utils::duration_to_hms;
+use crate::utils::{duration_to_hms, Client, NetResult};
 use crate::widgets::icon_button;
 use crate::workspace::WorkspaceId;
 

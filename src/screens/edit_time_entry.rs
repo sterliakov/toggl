@@ -6,11 +6,10 @@ use iced::widget::{
 use iced::{keyboard, Element, Fill, Length, Task as Command};
 use iced_fonts::bootstrap::Bootstrap;
 
-use crate::client::Client;
 use crate::customization::Customization;
 use crate::project::{MaybeProject, Project};
 use crate::time_entry::TimeEntry;
-use crate::utils::ExactModifiers;
+use crate::utils::{Client, ExactModifiers};
 use crate::widgets::{icon_text, DateTimeEditMessage, DateTimeWidget};
 
 #[derive(Debug)]
