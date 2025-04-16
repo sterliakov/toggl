@@ -5,11 +5,13 @@ use iced_fonts::{Bootstrap, BOOTSTRAP_FONT};
 
 mod date_time_widget;
 mod menu_helpers;
+mod text_editor_ext;
 
 pub use date_time_widget::{DateTimeEditMessage, DateTimeWidget};
 pub use menu_helpers::{
     menu_select_item, menu_text, menu_text_disabled, top_level_menu_text,
 };
+pub use text_editor_ext::{TextEditorExt, TextEditorMessage};
 
 pub fn icon_text<'a>(
     icon: Bootstrap,

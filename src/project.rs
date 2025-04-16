@@ -71,6 +71,13 @@ impl From<MaybeProject> for Option<Project> {
 }
 
 impl MaybeProject {
+    pub fn id(&self) -> Option<ProjectId> {
+        match self {
+            Self::Some(p) => Some(p.id),
+            Self::None => None,
+        }
+    }
+
     pub fn project_badge<'a, T>(
         &self,
     ) -> badge::Badge<'a, T, iced::Theme, iced::Renderer> {
