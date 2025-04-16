@@ -18,7 +18,6 @@ pub enum LoginScreenMessage {
     Submit,
     Completed(String),
     Error(String),
-    TabPressed(bool),
 }
 
 impl LoginScreen {
@@ -61,13 +60,6 @@ impl LoginScreen {
                 return Command::future(self.clone().submit());
             }
             LoginScreenMessage::Completed(_) => {}
-            LoginScreenMessage::TabPressed(is_shift) => {
-                return if is_shift {
-                    iced::widget::focus_previous()
-                } else {
-                    iced::widget::focus_next()
-                }
-            }
         };
         Command::none()
     }

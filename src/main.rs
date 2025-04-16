@@ -100,9 +100,7 @@ enum Message {
     WindowIdReceived(Option<window::Id>),
     SelectWorkspace(WorkspaceId),
     SelectProject(Option<ProjectId>),
-    TabPressed(bool),
-    EscPressed,
-    EnterPressed(keyboard::Modifiers),
+    KeyPressed(NamedKey, keyboard::Modifiers),
     SetUpdateStep(UpdateStep),
 }
 
@@ -196,6 +194,15 @@ impl App {
                 self.error = e;
                 return Command::none();
             }
+            Message::KeyPressed(NamedKey::Tab, m) => {
+                return if m.is_empty() {
+                    iced::widget::focus_next()
+                } else if m.shift() && m.is_exact() {
+                    iced::widget::focus_previous()
+                } else {
+                    Command::none()
+                }
+            }
             _ => {}
         };
 
@@ -230,11 +237,6 @@ impl App {
                 }
                 Message::LoginProxy(msg) => {
                     return screen.update(msg).map(Message::LoginProxy)
-                }
-                Message::TabPressed(is_shift) => {
-                    return screen
-                        .update(LoginScreenMessage::TabPressed(is_shift))
-                        .map(Message::LoginProxy)
                 }
                 _ => {}
             },
@@ -375,17 +377,9 @@ impl App {
                 Message::EditTimeEntryProxy(EditTimeEntryMessage::Abort) => {
                     self.screen = Screen::Loaded(TemporaryState::default())
                 }
-                Message::EscPressed => {
+                Message::KeyPressed(key, m) => {
                     return screen
-                        .handle_key(
-                            NamedKey::Escape,
-                            keyboard::Modifiers::empty(),
-                        )
-                        .map(Message::EditTimeEntryProxy)
-                }
-                Message::EnterPressed(m) => {
-                    return screen
-                        .handle_key(NamedKey::Enter, m)
+                        .handle_key(key, m)
                         .map(Message::EditTimeEntryProxy)
                 }
                 Message::EditTimeEntryProxy(msg) => {
@@ -632,19 +626,12 @@ impl App {
                     return None;
                 };
                 match (key, modifiers) {
-                    (NamedKey::Tab, m) => {
-                        if m.is_empty() {
-                            Some(Message::TabPressed(false))
-                        } else if m.shift() && m.is_exact() {
-                            Some(Message::TabPressed(true))
-                        } else {
-                            None
-                        }
+                    (NamedKey::Enter | NamedKey::Tab, m) => {
+                        Some(Message::KeyPressed(key, m))
                     }
                     (NamedKey::Escape, m) if m.is_empty() => {
-                        Some(Message::EscPressed)
+                        Some(Message::KeyPressed(key, m))
                     }
-                    (NamedKey::Enter, m) => Some(Message::EnterPressed(m)),
                     _ => None,
                 }
             }),
