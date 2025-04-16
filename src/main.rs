@@ -31,7 +31,7 @@ use crate::screens::{
 use crate::state::{State, StatePersistenceError};
 use crate::time_entry::{TimeEntry, TimeEntryMessage};
 use crate::updater::UpdateStep;
-use crate::utils::{duration_to_hms, Client, ExactModifiers};
+use crate::utils::{duration_to_hms, Client, ExactModifiers, NetResult};
 use crate::widgets::{
     menu_select_item, menu_text, menu_text_disabled, top_level_menu_text,
 };
@@ -104,6 +104,15 @@ enum Message {
     EscPressed,
     EnterPressed(keyboard::Modifiers),
     SetUpdateStep(UpdateStep),
+}
+
+impl Message {
+    pub fn err_or_reload<T>(value: NetResult<T>) -> Self {
+        match value {
+            Ok(_) => Self::Reload,
+            Err(e) => Self::Error(e.to_string()),
+        }
+    }
 }
 
 lazy_static! {
@@ -249,18 +258,7 @@ impl App {
                         let token = self.state.api_token.clone();
                         return Command::future(async move {
                             let client = Client::from_api_token(&token);
-                            match entry.stop(&client).await {
-                                Err(e) => {
-                                    error!(
-                                        "Failed to stop a running entry: {e}"
-                                    );
-                                    Message::Error(e.to_string())
-                                }
-                                Ok(_) => {
-                                    debug!("Entry stopped.");
-                                    Message::Reload
-                                }
-                            }
+                            Message::err_or_reload(entry.stop(&client).await)
                         });
                     } else {
                         warn!("Requested to stop a nonexistent running entry.");
@@ -270,22 +268,15 @@ impl App {
                     let token = self.state.api_token.clone();
                     return Command::future(async move {
                         let client = Client::from_api_token(&token);
-                        let fut = TimeEntry::create_running(
-                            e.description,
-                            e.workspace_id,
-                            e.project_id,
-                            &client,
-                        );
-                        match fut.await {
-                            Err(e) => {
-                                error!("Failed to duplicate an entry: {e}");
-                                Message::Error(e.to_string())
-                            }
-                            Ok(_) => {
-                                debug!("Entry duplicated.");
-                                Message::Reload
-                            }
-                        }
+                        Message::err_or_reload(
+                            TimeEntry::create_running(
+                                e.description,
+                                e.workspace_id,
+                                e.project_id,
+                                &client,
+                            )
+                            .await,
+                        )
                     });
                 }
                 Message::CustomizationProxy(CustomizationMessage::Save) => {
@@ -314,22 +305,15 @@ impl App {
                     let project_id = self.state.default_project;
                     return Command::future(async move {
                         let client = Client::from_api_token(&token);
-                        let fut = TimeEntry::create_running(
-                            Some(description),
-                            workspace_id,
-                            project_id,
-                            &client,
-                        );
-                        match fut.await {
-                            Err(e) => {
-                                error!("Failed to create a new entry: {e}");
-                                Message::Error(e.to_string())
-                            }
-                            Ok(_) => {
-                                debug!("Entry created.");
-                                Message::Reload
-                            }
-                        }
+                        Message::err_or_reload(
+                            TimeEntry::create_running(
+                                Some(description),
+                                workspace_id,
+                                project_id,
+                                &client,
+                            )
+                            .await,
+                        )
                     });
                 }
                 Message::LoadMore => {
@@ -388,27 +372,21 @@ impl App {
                     self.screen = Screen::Loading;
                     return Command::perform(State::load(), Message::Loaded);
                 }
+                Message::EditTimeEntryProxy(EditTimeEntryMessage::Abort) => {
+                    self.screen = Screen::Loaded(TemporaryState::default())
+                }
                 Message::EscPressed => {
                     return screen
                         .handle_key(
                             NamedKey::Escape,
                             keyboard::Modifiers::empty(),
                         )
-                        .map(|c| c.map(Message::EditTimeEntryProxy))
-                        .unwrap_or_else(|| {
-                            self.screen =
-                                Screen::Loaded(TemporaryState::default());
-                            Command::none()
-                        })
+                        .map(Message::EditTimeEntryProxy)
                 }
                 Message::EnterPressed(m) => {
                     return screen
                         .handle_key(NamedKey::Enter, m)
-                        .unwrap_or_else(Command::none)
                         .map(Message::EditTimeEntryProxy)
-                }
-                Message::EditTimeEntryProxy(EditTimeEntryMessage::Abort) => {
-                    self.screen = Screen::Loaded(TemporaryState::default())
                 }
                 Message::EditTimeEntryProxy(msg) => {
                     return screen

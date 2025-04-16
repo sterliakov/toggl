@@ -221,17 +221,19 @@ impl EditTimeEntry {
         &mut self,
         key: NamedKey,
         modifiers: keyboard::Modifiers,
-    ) -> Option<Command<EditTimeEntryMessage>> {
+    ) -> Command<EditTimeEntryMessage> {
         if let Some(c) = self.start_dt.handle_key(key) {
-            Some(c.map(EditTimeEntryMessage::StartEdited))
+            c.map(EditTimeEntryMessage::StartEdited)
         } else if let Some(c) = self.stop_dt.handle_key(key) {
-            Some(c.map(EditTimeEntryMessage::StopEdited))
+            c.map(EditTimeEntryMessage::StopEdited)
         } else if matches!(key, NamedKey::Enter)
             && modifiers.is_exact_ctrl_or_cmd()
         {
-            Some(Command::done(EditTimeEntryMessage::Submit))
+            Command::done(EditTimeEntryMessage::Submit)
+        } else if matches!(key, NamedKey::Escape) && modifiers.is_empty() {
+            Command::done(EditTimeEntryMessage::Abort)
         } else {
-            None
+            Command::none()
         }
     }
 
