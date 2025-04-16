@@ -1,5 +1,4 @@
 use clap::{crate_version, Parser};
-use customization::{Customization, CustomizationMessage};
 use iced::keyboard::key::Named as NamedKey;
 use iced::widget::{
     button, center, column, container, horizontal_rule, row, scrollable, text,
@@ -12,15 +11,13 @@ use iced_aw::menu;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
-use serde::{Deserialize, Serialize};
-use updater::UpdateStep;
-use utils::{duration_to_hms, ExactModifiers};
 
 mod cli;
 mod customization;
 mod project;
 mod related_info;
 mod screens;
+mod state;
 mod time_entry;
 mod updater;
 mod utils;
@@ -28,17 +25,20 @@ mod widgets;
 mod workspace;
 
 use crate::cli::CliArgs;
-use crate::project::{Project, ProjectId};
+use crate::customization::CustomizationMessage;
+use crate::project::ProjectId;
 use crate::related_info::ExtendedMe;
 use crate::screens::{
     EditTimeEntry, EditTimeEntryMessage, LoginScreen, LoginScreenMessage,
 };
+use crate::state::{State, StatePersistenceError};
 use crate::time_entry::{CreateTimeEntry, TimeEntry, TimeEntryMessage};
-use crate::utils::Client;
+use crate::updater::UpdateStep;
+use crate::utils::{duration_to_hms, Client, ExactModifiers};
 use crate::widgets::{
     menu_select_item, menu_text, menu_text_disabled, top_level_menu_text,
 };
-use crate::workspace::{Workspace, WorkspaceId};
+use crate::workspace::WorkspaceId;
 
 pub fn main() -> iced::Result {
     env_logger::init();
@@ -57,50 +57,6 @@ pub fn main() -> iced::Result {
             ..iced::Settings::default()
         })
         .run_with(App::new)
-}
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-struct State {
-    api_token: String,
-    time_entries: Vec<TimeEntry>,
-    running_entry: Option<TimeEntry>,
-    has_more_entries: bool,
-    projects: Vec<Project>,
-    workspaces: Vec<Workspace>,
-    default_workspace: Option<WorkspaceId>,
-    default_project: Option<ProjectId>,
-    customization: Customization,
-}
-
-impl State {
-    pub fn update_from_context(self, me: ExtendedMe) -> Self {
-        let ws_id = self
-            .default_workspace
-            .filter(|&ws| me.workspaces.iter().any(|w| w.id == ws))
-            .or_else(|| me.workspaces.first().map(|ws| ws.id));
-        let project_id = self
-            .default_project
-            .filter(|&proj| me.projects.iter().any(|p| p.id == proj));
-        let (running_entry, time_entries) =
-            TimeEntry::split_running(if let Some(ws_id) = ws_id {
-                me.time_entries
-                    .into_iter()
-                    .filter(|e| e.workspace_id == ws_id)
-                    .collect()
-            } else {
-                me.time_entries
-            });
-        Self {
-            running_entry,
-            time_entries,
-            has_more_entries: true,
-            projects: me.projects,
-            workspaces: me.workspaces,
-            default_workspace: ws_id,
-            default_project: project_id,
-            ..self
-        }
-    }
 }
 
 #[derive(Debug, Default)]
@@ -742,80 +698,4 @@ fn running_entry_input(description: &str) -> Element<'_, Message> {
         button("Create").on_press(Message::SubmitNewRunningEntry)
     ]
     .into()
-}
-
-#[derive(Debug, Clone)]
-enum StatePersistenceError {
-    FileSystem,
-    Format,
-}
-
-impl std::fmt::Display for StatePersistenceError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let msg = match self {
-            Self::FileSystem => "Failed to read/write a state file.",
-            Self::Format => "State file format not recognized.",
-        };
-        msg.fmt(f)
-    }
-}
-
-impl State {
-    fn path() -> std::path::PathBuf {
-        let mut path = if let Some(project_dirs) =
-            directories_next::ProjectDirs::from("rs", "Iced", "toggl-tracker")
-        {
-            project_dirs.data_dir().into()
-        } else {
-            std::env::current_dir().unwrap_or_default()
-        };
-
-        path.push("toggl.json");
-        path
-    }
-
-    async fn load() -> Result<Box<Self>, StatePersistenceError> {
-        use async_std::prelude::*;
-
-        let mut contents = String::new();
-
-        let mut file = async_std::fs::File::open(Self::path())
-            .await
-            .map_err(|_| StatePersistenceError::FileSystem)?;
-
-        file.read_to_string(&mut contents)
-            .await
-            .map_err(|_| StatePersistenceError::FileSystem)?;
-
-        serde_json::from_str(&contents)
-            .map_err(|_| StatePersistenceError::Format)
-    }
-
-    async fn save(self) -> Result<(), StatePersistenceError> {
-        // This takes ownership for easier async saving
-        use async_std::prelude::*;
-
-        let json = serde_json::to_string_pretty(&self)
-            .map_err(|_| StatePersistenceError::Format)?;
-
-        let path = Self::path();
-
-        if let Some(dir) = path.parent() {
-            async_std::fs::create_dir_all(dir)
-                .await
-                .map_err(|_| StatePersistenceError::FileSystem)?;
-        }
-
-        {
-            let mut file = async_std::fs::File::create(path)
-                .await
-                .map_err(|_| StatePersistenceError::FileSystem)?;
-
-            file.write_all(json.as_bytes())
-                .await
-                .map_err(|_| StatePersistenceError::FileSystem)?;
-        }
-
-        Ok(())
-    }
 }

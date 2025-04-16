@@ -281,7 +281,7 @@ impl TimeEntry {
 #[cfg(test)]
 mod test {
     use super::TimeEntry;
-    use crate::client::Client;
+    use crate::utils::Client;
 
     fn test_client() -> Client {
         Client::from_email_password(
