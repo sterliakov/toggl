@@ -14,20 +14,17 @@ use log::{debug, error, info, warn};
 
 mod cli;
 mod customization;
-mod project;
-mod related_info;
+mod entities;
 mod screens;
 mod state;
 mod time_entry;
 mod updater;
 mod utils;
 mod widgets;
-mod workspace;
 
 use crate::cli::CliArgs;
 use crate::customization::CustomizationMessage;
-use crate::project::ProjectId;
-use crate::related_info::ExtendedMe;
+use crate::entities::{ExtendedMe, ProjectId, WorkspaceId};
 use crate::screens::{
     EditTimeEntry, EditTimeEntryMessage, LoginScreen, LoginScreenMessage,
 };
@@ -38,7 +35,6 @@ use crate::utils::{duration_to_hms, Client, ExactModifiers};
 use crate::widgets::{
     menu_select_item, menu_text, menu_text_disabled, top_level_menu_text,
 };
-use crate::workspace::WorkspaceId;
 
 pub fn main() -> iced::Result {
     env_logger::init();

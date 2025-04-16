@@ -1,10 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::customization::Customization;
-use crate::project::{Project, ProjectId};
-use crate::related_info::ExtendedMe;
+use crate::entities::{ExtendedMe, Project, ProjectId, Workspace, WorkspaceId};
 use crate::time_entry::TimeEntry;
-use crate::workspace::{Workspace, WorkspaceId};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct State {

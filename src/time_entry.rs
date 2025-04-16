@@ -5,10 +5,9 @@ use iced::{Color, Element, Length};
 use log::debug;
 use serde::{Deserialize, Serialize, Serializer};
 
-use crate::project::{MaybeProject, Project, ProjectId};
+use crate::entities::{MaybeProject, Project, ProjectId, WorkspaceId};
 use crate::utils::{duration_to_hms, Client, NetResult};
 use crate::widgets::icon_button;
-use crate::workspace::WorkspaceId;
 
 fn datetime_serialize_utc<S: Serializer>(
     x: &DateTime<Local>,
