@@ -149,9 +149,7 @@ impl EditTimeEntry {
                 let base = pick_list::default(theme, status);
                 pick_list::Style {
                     background: match &self.selected_project {
-                        MaybeProject::Some(p) => iced::Color::parse(&p.color)
-                            .expect("Must be a valid color")
-                            .into(),
+                        MaybeProject::Some(p) => p.parsed_color().into(),
                         MaybeProject::None => base.background,
                     },
                     ..base
