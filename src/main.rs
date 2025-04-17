@@ -16,6 +16,8 @@ mod customization;
 mod entities;
 mod screens;
 mod state;
+#[cfg(test)]
+mod test;
 mod time_entry;
 mod updater;
 mod utils;

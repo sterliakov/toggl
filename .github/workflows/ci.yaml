@@ -35,8 +35,8 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Ensure it builds
-        run: cargo build --release
+      - name: Run tests
+        run: cargo test
 
   check-changelog:
     runs-on: ubuntu-latest

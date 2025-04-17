@@ -46,7 +46,7 @@ impl State {
         let project_id = self
             .default_project
             .filter(|&proj| me.projects.iter().any(|p| p.id == proj));
-        let earliest_entry_time = me.time_entries.last().map(|last| last.start);
+        let earliest_entry_time = me.time_entries.iter().map(|e| e.start).min();
         let (running_entry, time_entries) =
             TimeEntry::split_running(if let Some(ws_id) = ws_id {
                 me.time_entries
@@ -173,5 +173,90 @@ impl State {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use chrono::{Duration, Local, TimeDelta};
+
+    use super::State;
+    use crate::entities::{Workspace, WorkspaceId};
+    use crate::time_entry::TimeEntry;
+    use crate::ExtendedMe;
+
+    #[test]
+    fn test_state_load() {
+        let ws = Workspace::default();
+        let now = Local::now();
+        let e_running = TimeEntry {
+            start: now,
+            duration: -1,
+            ..TimeEntry::default()
+        };
+        let e_stopped = TimeEntry {
+            start: now - TimeDelta::minutes(11),
+            stop: Some(now - TimeDelta::minutes(1)),
+            duration: 10 * 60,
+            ..TimeEntry::default()
+        };
+        let e_foreign = TimeEntry {
+            start: now - TimeDelta::minutes(22),
+            stop: Some(now - TimeDelta::minutes(12)),
+            duration: 10 * 60,
+            workspace_id: WorkspaceId::new(1),
+            ..TimeEntry::default()
+        };
+        let me = ExtendedMe {
+            api_token: "token".to_string(),
+            projects: vec![],
+            workspaces: vec![ws.clone()],
+            time_entries: vec![e_running.clone(), e_stopped, e_foreign.clone()],
+        };
+        let mut state = State::default().update_from_context(me);
+        assert_eq!(state.running_entry, Some(e_running));
+        assert_eq!(state.time_entries.len(), 1);
+        assert_eq!(state.default_workspace, Some(ws.id));
+        assert_eq!(state.default_project, None);
+        assert_eq!(state.earliest_entry_time, Some(e_foreign.start));
+        let running_time = Local::now() - now;
+        assert!(state.week_total() > Duration::minutes(10) + running_time);
+        assert!(
+            state.week_total()
+                < Duration::minutes(10)
+                    + running_time
+                    + Duration::milliseconds(200)
+        );
+
+        assert!(state.has_more_entries);
+        assert!(!state.has_whole_last_week());
+        state.add_entries(Vec::new().into_iter());
+        assert!(!state.has_more_entries);
+        assert!(state.has_whole_last_week());
+    }
+
+    #[test]
+    fn test_state_load_old_enough() {
+        let ws = Workspace::default();
+        let now = Local::now() - TimeDelta::days(7);
+        let e = TimeEntry {
+            start: now - TimeDelta::minutes(11),
+            stop: Some(now - TimeDelta::minutes(1)),
+            duration: 10 * 60,
+            ..TimeEntry::default()
+        };
+        let me = ExtendedMe {
+            api_token: "token".to_string(),
+            projects: vec![],
+            workspaces: vec![ws.clone()],
+            time_entries: vec![e.clone()],
+        };
+        let state = State::default().update_from_context(me);
+        assert_eq!(state.running_entry, None);
+        assert_eq!(state.time_entries.len(), 1);
+        assert_eq!(state.earliest_entry_time, Some(e.start));
+        assert_eq!(state.week_total(), Duration::zero());
+        assert!(state.has_more_entries);
+        assert!(state.has_whole_last_week());
     }
 }

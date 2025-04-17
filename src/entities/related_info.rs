@@ -8,8 +8,11 @@ use crate::utils::{Client, NetResult};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExtendedMe {
     pub api_token: String,
+    #[serde(default)]
     pub projects: Vec<Project>,
+    #[serde(default)]
     pub workspaces: Vec<Workspace>,
+    #[serde(default)]
     pub time_entries: Vec<TimeEntry>,
 }
 

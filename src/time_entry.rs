@@ -24,6 +24,7 @@ fn maybe_datetime_serialize_utc<S: Serializer>(
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Default))]
 pub struct TimeEntry {
     pub at: String,
     pub billable: bool,
@@ -242,26 +243,49 @@ impl TimeEntry {
 #[cfg(test)]
 mod test {
     use super::TimeEntry;
-    use crate::utils::Client;
-
-    fn test_client() -> Client {
-        Client::from_email_password(
-            &std::env::var("TEST_EMAIL").expect("Please pass TEST_EMAIL"),
-            &std::env::var("TEST_PASSWORD").expect("Please pass TEST_PASSWORD"),
-        )
-    }
+    use crate::test::test_client;
+    use crate::ExtendedMe;
 
     #[async_std::test]
-    async fn test_load_until_now() {
+    async fn test_crud_cycle() {
         let client = test_client();
-        let entries = TimeEntry::load(None, &client).await.expect("Failed");
-        assert_ne!(entries.len(), 0);
+        let me = ExtendedMe::load(&client).await.expect("get self");
+        let ws = me.workspaces.first().expect("no workspace").id;
+        let initial_count = me.time_entries.len();
 
-        let prev_entries =
-            TimeEntry::load(entries.last().map(|e| e.start), &client)
-                .await
-                .expect("Failed");
-        assert_ne!(prev_entries.len(), 0);
-        assert_ne!(prev_entries.first(), entries.last());
+        TimeEntry::create_running(Some("Test".to_owned()), ws, None, &client)
+            .await
+            .expect("create");
+        let entries =
+            TimeEntry::load(None, &client).await.expect("get entries");
+        assert_eq!(entries.len(), initial_count + 1);
+        assert_eq!(entries[0].description, Some("Test".to_string()));
+        let (running, _) = TimeEntry::split_running(entries);
+        assert!(running.is_some());
+
+        running.unwrap().stop(&client).await.expect("stop");
+        let entries =
+            TimeEntry::load(None, &client).await.expect("get entries");
+        assert_eq!(entries.len(), initial_count + 1);
+        assert_eq!(entries[0].description, Some("Test".to_string()));
+        let (running, entries) = TimeEntry::split_running(entries);
+        assert!(running.is_none());
+
+        let mut last = entries[0].clone();
+        last.description = Some("Other".to_string());
+        last.save(&client).await.expect("update");
+        let entries =
+            TimeEntry::load(None, &client).await.expect("get entries");
+        assert_eq!(entries.len(), initial_count + 1);
+        assert_eq!(entries[0].description, Some("Other".to_string()));
+
+        entries[0].clone().delete(&client).await.expect("delete");
+        let entries =
+            TimeEntry::load(None, &client).await.expect("get entries");
+        assert_eq!(entries.len(), initial_count);
+
+        TimeEntry::load(entries.last().map(|e| e.start), &client)
+            .await
+            .expect("get older");
     }
 }
