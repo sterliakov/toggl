@@ -1,4 +1,4 @@
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Duration, Local};
 use iced::alignment::Vertical;
 use iced::widget::{button, column, row, text};
 use iced::{Element, Length};
@@ -184,11 +184,14 @@ pub enum TimeEntryMessage {
 }
 
 impl TimeEntry {
-    pub fn duration_string(&self) -> String {
-        let diff = self.stop.unwrap_or_else(|| {
+    pub fn get_duration(&self) -> Duration {
+        self.stop.unwrap_or_else(|| {
             Local::now().with_timezone(&self.start.timezone())
-        }) - self.start;
-        duration_to_hms(&diff)
+        }) - self.start
+    }
+
+    pub fn duration_string(&self) -> String {
+        duration_to_hms(&self.get_duration())
     }
 
     pub fn project(&self, projects: &[Project]) -> MaybeProject {

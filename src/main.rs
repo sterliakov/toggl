@@ -1,4 +1,5 @@
 use clap::{crate_version, Parser};
+use iced::alignment::Horizontal;
 use iced::keyboard::key::Named as NamedKey;
 use iced::widget::{
     button, center, column, container, horizontal_rule, row, scrollable, text,
@@ -8,6 +9,7 @@ use iced_aw::menu;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{debug, error, info};
+use utils::duration_to_hm;
 
 mod cli;
 mod customization;
@@ -164,10 +166,11 @@ impl App {
                     self.screen = Screen::Loaded(TemporaryState::default())
                 };
                 self.state = self.state.clone().update_from_context(state);
-                return Command::batch(vec![
-                    self.save_state(),
-                    self.update_icon(),
-                ]);
+                let mut steps = vec![self.save_state(), self.update_icon()];
+                if !self.state.has_whole_last_week() {
+                    steps.push(Command::done(Message::LoadMore));
+                }
+                return Command::batch(steps);
             }
             Message::Error(e) => {
                 error!("Received generic error: {e}");
@@ -271,8 +274,7 @@ impl App {
                 Message::LoadMore => {
                     info!("Loading older entries...");
                     let token = self.state.api_token.clone();
-                    let first_start =
-                        self.state.time_entries.last().map(|e| e.start);
+                    let first_start = self.state.earliest_entry_time;
                     return Command::future(async move {
                         let client = Client::from_api_token(&token);
                         match TimeEntry::load(first_start, &client).await {
@@ -284,16 +286,15 @@ impl App {
                 Message::LoadedMore(entries) => {
                     if entries.is_empty() {
                         info!("No older entries found.");
-                        self.state.has_more_entries = false;
                     } else {
                         info!("Loaded older entries.");
                     }
-                    self.state.time_entries.extend(entries.into_iter().filter(
-                        |e| {
-                            Some(e.workspace_id) == self.state.default_workspace
-                        },
-                    ));
-                    return self.save_state();
+                    self.state.add_entries(entries.into_iter());
+                    let mut steps = vec![self.save_state(), self.update_icon()];
+                    if !self.state.has_whole_last_week() {
+                        steps.push(Command::done(Message::LoadMore));
+                    }
+                    return Command::batch(steps);
                 }
                 Message::Reload => {
                     debug!("Syncing with remote...");
@@ -488,8 +489,27 @@ impl App {
                 .max_width(120.0),
             ),
             self.state.customization.view(&Message::CustomizationProxy),
+            self.week_total(),
         ])
+        .width(iced::Length::Fill)
         .into()
+    }
+
+    fn week_total(&self) -> menu::Item<Message, iced::Theme, iced::Renderer> {
+        menu::Item::new(
+            button(
+                text(format!(
+                    "Week total: {}",
+                    duration_to_hm(&self.state.week_total())
+                ))
+                .size(11)
+                .align_x(Horizontal::Right)
+                .width(iced::Length::Fill),
+            )
+            .padding([2, 4])
+            .width(iced::Length::Fill)
+            .style(|_, _| button::Style::default()),
+        )
     }
 
     fn day_group<'a>(

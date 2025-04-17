@@ -1,8 +1,10 @@
+use chrono::{DateTime, Duration, Local};
 use serde::{Deserialize, Serialize};
 
 use crate::customization::Customization;
 use crate::entities::{ExtendedMe, Project, ProjectId, Workspace, WorkspaceId};
 use crate::time_entry::TimeEntry;
+use crate::utils::to_start_of_week;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct State {
@@ -10,6 +12,8 @@ pub struct State {
     pub time_entries: Vec<TimeEntry>,
     pub running_entry: Option<TimeEntry>,
     pub has_more_entries: bool,
+    /// Earliest entry time (may not be in `time_entries` if comes from other workspace)
+    pub earliest_entry_time: Option<DateTime<Local>>,
     pub projects: Vec<Project>,
     pub workspaces: Vec<Workspace>,
     pub default_workspace: Option<WorkspaceId>,
@@ -42,6 +46,7 @@ impl State {
         let project_id = self
             .default_project
             .filter(|&proj| me.projects.iter().any(|p| p.id == proj));
+        let earliest_entry_time = me.time_entries.last().map(|last| last.start);
         let (running_entry, time_entries) =
             TimeEntry::split_running(if let Some(ws_id) = ws_id {
                 me.time_entries
@@ -54,12 +59,59 @@ impl State {
         Self {
             running_entry,
             time_entries,
-            has_more_entries: true,
+            // If we got 0 entries, no reason to load more.
+            has_more_entries: earliest_entry_time.is_some(),
             projects: me.projects,
             workspaces: me.workspaces,
             default_workspace: ws_id,
             default_project: project_id,
+            earliest_entry_time,
             ..self
+        }
+    }
+
+    pub fn has_whole_last_week(&self) -> bool {
+        if !self.has_more_entries {
+            return true;
+        }
+        match self.earliest_entry_time {
+            Some(time) => time < to_start_of_week(Local::now()),
+            None => true,
+        }
+    }
+
+    pub fn add_entries(&mut self, entries: impl Iterator<Item = TimeEntry>) {
+        let mut earliest = None;
+        self.time_entries.extend(
+            entries
+                .inspect(|e| {
+                    earliest = match earliest {
+                        None => Some(e.start),
+                        Some(v) => Some(v.min(e.start)),
+                    }
+                })
+                .filter(|e| Some(e.workspace_id) == self.default_workspace),
+        );
+        self.has_more_entries = earliest.is_some();
+        self.earliest_entry_time = earliest.or(self.earliest_entry_time);
+    }
+
+    pub fn week_total(&self) -> Duration {
+        let mon = to_start_of_week(Local::now());
+        let old = self
+            .time_entries
+            .iter()
+            .filter_map(|e| {
+                if e.start >= mon {
+                    Some(e.get_duration())
+                } else {
+                    None
+                }
+            })
+            .sum();
+        match &self.running_entry {
+            None => old,
+            Some(e) => old + e.get_duration(),
         }
     }
 }
