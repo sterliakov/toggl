@@ -24,6 +24,7 @@ pub fn duration_to_hm(duration: &Duration) -> String {
 }
 
 pub fn to_start_of_week(date: DateTime<Local>) -> DateTime<Local> {
+    // TODO: start of week is configurable in toggl API, use it
     let mon_naive = NaiveDate::from_isoywd_opt(
         date.year(),
         date.iso_week().week(),

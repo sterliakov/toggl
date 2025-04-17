@@ -14,6 +14,7 @@
 * feat: added project badge to running entry row
 * feat: added Cargo and NPM as distribution channels
 * feat: added self-update support
+* bugfix: fixed crash when no projects exist
 
 ## 0.1.2
 

@@ -100,12 +100,13 @@ struct LoginResponse {
 #[cfg(test)]
 mod test {
     use super::LoginScreen;
+    use crate::test;
 
     #[async_std::test]
     async fn test_load() {
         let token = LoginScreen::call_submit(
-            &std::env::var("TEST_EMAIL").expect("Please pass TEST_EMAIL"),
-            &std::env::var("TEST_PASSWORD").expect("Please pass TEST_PASSWORD"),
+            &test::test_email(),
+            &test::test_password(),
         )
         .await
         .expect("Must not fail");
