@@ -7,7 +7,8 @@ use iced::{keyboard, Element, Fill, Length, Task as Command};
 use iced_fonts::bootstrap::Bootstrap;
 
 use crate::customization::Customization;
-use crate::entities::{MaybeProject, Project};
+use crate::entities::MaybeProject;
+use crate::state::State;
 use crate::time_entry::TimeEntry;
 use crate::utils::{Client, ExactModifiers};
 use crate::widgets::{
@@ -41,36 +42,27 @@ pub enum EditTimeEntryMessage {
 }
 
 impl EditTimeEntry {
-    pub fn new(
-        entry: TimeEntry,
-        api_token: &str,
-        customization: &Customization,
-        projects: Vec<Project>,
-    ) -> Self {
+    pub fn new(entry: TimeEntry, state: &State) -> Self {
         let description = entry.description.clone();
         let start_dt = DateTimeWidget::new(
             Some(entry.start),
             "Start",
             "start-input",
-            customization,
+            &state.customization,
         );
         let stop_dt = DateTimeWidget::new(
             entry.stop,
             "Stop",
             "stop-input",
-            customization,
+            &state.customization,
         );
+        let selected_project = entry.project(&state.projects);
         let projects: Vec<MaybeProject> = std::iter::once(MaybeProject::None)
-            .chain(projects.iter().cloned().map(|p| p.into()))
+            .chain(state.projects.iter().cloned().map(|p| p.into()))
             .collect();
-        let selected_project = projects
-            .iter()
-            .find(|p| p.id() == entry.project_id)
-            .cloned()
-            .unwrap_or(MaybeProject::None);
         Self {
             entry,
-            api_token: api_token.to_string(),
+            api_token: state.api_token.clone(),
             description_editor: TextEditorExt::new(&description),
             start_dt,
             stop_dt,
@@ -80,10 +72,10 @@ impl EditTimeEntry {
         }
     }
 
-    pub fn view<'a>(
-        &'a self,
-        customization: &'a Customization,
-    ) -> Element<'a, EditTimeEntryMessage> {
+    pub fn view(
+        &self,
+        customization: &Customization,
+    ) -> Element<EditTimeEntryMessage> {
         use std::borrow::Borrow;
 
         let content = column![

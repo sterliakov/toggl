@@ -2,15 +2,12 @@ use clap::{crate_version, Parser};
 use iced::keyboard::key::Named as NamedKey;
 use iced::widget::{
     button, center, column, container, horizontal_rule, row, scrollable, text,
-    text_input,
 };
-use iced::{
-    keyboard, window, Center, Color, Element, Fill, Padding, Task as Command,
-};
+use iced::{keyboard, window, Center, Element, Fill, Padding, Task as Command};
 use iced_aw::menu;
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 
 mod cli;
 mod customization;
@@ -31,9 +28,10 @@ use crate::screens::{
 use crate::state::{State, StatePersistenceError};
 use crate::time_entry::{TimeEntry, TimeEntryMessage};
 use crate::updater::UpdateStep;
-use crate::utils::{duration_to_hms, Client, ExactModifiers, NetResult};
+use crate::utils::{duration_to_hms, Client, ExactModifiers};
 use crate::widgets::{
     menu_select_item, menu_text, menu_text_disabled, top_level_menu_text,
+    RunningEntry, RunningEntryMessage,
 };
 
 pub fn main() -> iced::Result {
@@ -57,7 +55,7 @@ pub fn main() -> iced::Result {
 
 #[derive(Debug, Default)]
 struct TemporaryState {
-    new_running_entry_description: String,
+    running_entry_widget: RunningEntry,
     update_step: UpdateStep,
 }
 
@@ -84,13 +82,12 @@ enum Screen {
 #[derive(Debug, Clone)]
 enum Message {
     Loaded(Result<Box<State>, StatePersistenceError>),
-    DataFetched(Result<ExtendedMe, String>),
+    DataFetched(ExtendedMe),
     LoginProxy(LoginScreenMessage),
     TimeEntryProxy(TimeEntryMessage),
     EditTimeEntryProxy(EditTimeEntryMessage),
+    RunningEntryProxy(RunningEntryMessage),
     CustomizationProxy(CustomizationMessage),
-    SetInitialRunningEntry(String),
-    SubmitNewRunningEntry,
     LoadMore,
     LoadedMore(Vec<TimeEntry>),
     Tick,
@@ -102,15 +99,6 @@ enum Message {
     SelectProject(Option<ProjectId>),
     KeyPressed(NamedKey, keyboard::Modifiers),
     SetUpdateStep(UpdateStep),
-}
-
-impl Message {
-    pub fn err_or_reload<T>(value: NetResult<T>) -> Self {
-        match value {
-            Ok(_) => Self::Reload,
-            Err(e) => Self::Error(e.to_string()),
-        }
-    }
 }
 
 lazy_static! {
@@ -170,24 +158,16 @@ impl App {
                     return window::change_icon(id, self.icon());
                 };
             }
-            Message::DataFetched(Ok(state)) => {
+            Message::DataFetched(state) => {
                 info!("Loaded initial data.");
-                match &self.screen {
-                    Screen::Loaded(_) => {}
-                    _ => {
-                        self.screen = Screen::Loaded(TemporaryState::default())
-                    }
+                if !matches!(&self.screen, Screen::Loaded(_)) {
+                    self.screen = Screen::Loaded(TemporaryState::default())
                 };
                 self.state = self.state.clone().update_from_context(state);
                 return Command::batch(vec![
                     self.save_state(),
                     self.update_icon(),
                 ]);
-            }
-            Message::DataFetched(Err(e)) => {
-                error!("Failed to fetch initial data: {e}");
-                self.error = e;
-                return Command::none();
             }
             Message::Error(e) => {
                 error!("Received generic error: {e}");
@@ -242,82 +222,52 @@ impl App {
             },
             Screen::Authed => {}
             Screen::Loaded(temp_state) => match message {
-                Message::TimeEntryProxy(TimeEntryMessage::Edit(i)) => {
-                    if let Some(entry) =
-                        self.state.time_entries.iter().find(|e| e.id == i)
-                    {
-                        self.begin_edit(entry.clone());
-                    }
-                }
-                Message::TimeEntryProxy(TimeEntryMessage::EditRunning) => {
-                    if let Some(entry) = &self.state.running_entry {
-                        self.begin_edit(entry.clone());
-                    }
-                }
-                Message::TimeEntryProxy(TimeEntryMessage::StopRunning) => {
-                    if let Some(entry) = self.state.running_entry.clone() {
-                        info!("Stopping running entry {}...", entry.id);
-                        let token = self.state.api_token.clone();
-                        return Command::future(async move {
-                            let client = Client::from_api_token(&token);
-                            Message::err_or_reload(entry.stop(&client).await)
-                        });
-                    } else {
-                        warn!("Requested to stop a nonexistent running entry.");
-                    }
+                Message::TimeEntryProxy(TimeEntryMessage::Edit(e)) => {
+                    self.begin_edit(e.clone());
                 }
                 Message::TimeEntryProxy(TimeEntryMessage::Duplicate(e)) => {
                     let token = self.state.api_token.clone();
                     return Command::future(async move {
                         let client = Client::from_api_token(&token);
-                        Message::err_or_reload(
-                            TimeEntry::create_running(
-                                e.description,
-                                e.workspace_id,
-                                e.project_id,
-                                &client,
-                            )
-                            .await,
-                        )
+                        let fut = e.duplicate(&client);
+                        match fut.await {
+                            Ok(_) => Message::Reload,
+                            Err(e) => Message::Error(e.to_string()),
+                        }
                     });
                 }
-                Message::CustomizationProxy(CustomizationMessage::Save) => {
-                    return self.save_state();
-                }
-                Message::CustomizationProxy(msg) => {
-                    return self
-                        .state
-                        .customization
-                        .update(msg)
-                        .map(Message::CustomizationProxy);
-                }
-                Message::SetInitialRunningEntry(description) => {
-                    temp_state.new_running_entry_description = description;
-                }
-                Message::SubmitNewRunningEntry => {
-                    let token = self.state.api_token.clone();
-                    let description =
-                        temp_state.new_running_entry_description.clone();
-                    let Some(workspace_id) = self.state.default_workspace
-                    else {
-                        return Command::done(Message::Error(
-                            "No workspace selected!".to_string(),
-                        ));
-                    };
-                    let project_id = self.state.default_project;
-                    return Command::future(async move {
-                        let client = Client::from_api_token(&token);
-                        Message::err_or_reload(
-                            TimeEntry::create_running(
-                                Some(description),
-                                workspace_id,
-                                project_id,
-                                &client,
-                            )
-                            .await,
-                        )
-                    });
-                }
+
+                Message::RunningEntryProxy(inner) => match inner {
+                    RunningEntryMessage::StartEditing(entry) => {
+                        self.begin_edit(*entry.clone());
+                    }
+                    RunningEntryMessage::Error(err) => {
+                        return Command::done(Message::Error(err));
+                    }
+                    RunningEntryMessage::Reload => {
+                        return Command::done(Message::Reload);
+                    }
+                    other => {
+                        return temp_state
+                            .running_entry_widget
+                            .update(other, &self.state)
+                            .map(Message::RunningEntryProxy);
+                    }
+                },
+
+                Message::CustomizationProxy(inner) => match inner {
+                    CustomizationMessage::Save => {
+                        return self.save_state();
+                    }
+                    other => {
+                        return self
+                            .state
+                            .customization
+                            .update(other)
+                            .map(Message::CustomizationProxy);
+                    }
+                },
+
                 Message::LoadMore => {
                     info!("Loading older entries...");
                     let token = self.state.api_token.clone();
@@ -402,12 +352,7 @@ impl App {
     }
 
     fn begin_edit(&mut self, entry: TimeEntry) {
-        self.screen = Screen::EditEntry(EditTimeEntry::new(
-            entry,
-            &self.state.api_token,
-            &self.state.customization,
-            self.state.projects.clone(),
-        ));
+        self.screen = Screen::EditEntry(EditTimeEntry::new(entry, &self.state));
     }
 
     fn view(&self) -> Element<Message> {
@@ -416,14 +361,6 @@ impl App {
             Screen::Authed => loading_message(),
             Screen::Unauthed(screen) => screen.view().map(Message::LoginProxy),
             Screen::Loaded(temp_state) => {
-                let running_entry = match &self.state.running_entry {
-                    None => running_entry_input(
-                        &temp_state.new_running_entry_description,
-                    ),
-                    Some(entry) => entry
-                        .view_running(&self.state.projects)
-                        .map(Message::TimeEntryProxy),
-                };
                 let content = column(
                     self.state
                         .time_entries
@@ -451,7 +388,10 @@ impl App {
                 container(
                     column![
                         self.menu(),
-                        running_entry,
+                        temp_state
+                            .running_entry_widget
+                            .view(&self.state)
+                            .map(Message::RunningEntryProxy),
                         container(scrollable(content)).style(|_| {
                             container::Style {
                                 border: iced::Border {
@@ -612,8 +552,8 @@ impl App {
         let client = Client::from_api_token(&api_token);
         ExtendedMe::load(&client)
             .await
-            .map(|m| Message::DataFetched(Ok(m)))
-            .unwrap_or_else(|e| Message::DataFetched(Err(e.to_string())))
+            .map(Message::DataFetched)
+            .unwrap_or_else(|e| Message::Error(e.to_string()))
     }
 
     fn subscription(&self) -> iced::Subscription<Message> {
@@ -641,23 +581,4 @@ impl App {
 
 fn loading_message<'a>() -> Element<'a, Message> {
     center(text("Loading...").width(Fill).align_x(Center).size(50)).into()
-}
-
-fn running_entry_input(description: &str) -> Element<'_, Message> {
-    row![
-        text_input("Create new entry...", description)
-            .id("running-entry-input")
-            .style(|_, _| text_input::Style {
-                background: iced::color!(0x161616).into(),
-                border: iced::Border::default(),
-                icon: Color::WHITE,
-                placeholder: iced::color!(0xd8d8d8),
-                value: Color::WHITE,
-                selection: Color::WHITE,
-            })
-            .on_input(Message::SetInitialRunningEntry)
-            .on_submit(Message::SubmitNewRunningEntry),
-        button("Create").on_press(Message::SubmitNewRunningEntry)
-    ]
-    .into()
 }

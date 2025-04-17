@@ -31,9 +31,10 @@ impl Project {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum MaybeProject {
     Some(Project),
+    #[default]
     None,
 }
 
