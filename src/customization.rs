@@ -3,10 +3,13 @@ use iced::Task as Command;
 use iced_aw::menu;
 use serde::{Deserialize, Serialize};
 
-use crate::widgets::{menu_select_item, menu_text, top_level_menu_text};
+use crate::utils::to_start_of_week;
+use crate::widgets::{
+    menu_select_item, menu_text, menu_text_disabled, top_level_menu_text,
+};
 
 trait LocaleString {
-    fn to_format_string(&self) -> String;
+    fn to_format_string(&self) -> &'static str;
 }
 
 #[derive(
@@ -18,10 +21,10 @@ pub enum DateFormat {
     Mdy,
 }
 impl LocaleString for DateFormat {
-    fn to_format_string(&self) -> String {
+    fn to_format_string(&self) -> &'static str {
         match self {
-            DateFormat::Dmy => "%d-%m-%y".to_string(),
-            DateFormat::Mdy => "%m-%d-%y".to_string(),
+            DateFormat::Dmy => "%d-%m-%y",
+            DateFormat::Mdy => "%m-%d-%y",
         }
     }
 }
@@ -47,10 +50,10 @@ pub enum TimeFormat {
     H24,
 }
 impl LocaleString for TimeFormat {
-    fn to_format_string(&self) -> String {
+    fn to_format_string(&self) -> &'static str {
         match self {
-            TimeFormat::H12 => "%I:%M:%S %p".to_string(),
-            TimeFormat::H24 => "%T".to_string(),
+            TimeFormat::H12 => "%I:%M:%S %p",
+            TimeFormat::H24 => "%T",
         }
     }
 }
@@ -68,10 +71,26 @@ impl TimeFormat {
     const VALUES: [Self; 2] = [Self::H12, Self::H24];
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Customization {
     date_format: DateFormat,
     time_format: TimeFormat,
+    #[serde(default = "default_week_day")]
+    week_start_day: chrono::Weekday,
+}
+
+const fn default_week_day() -> chrono::Weekday {
+    chrono::Weekday::Mon
+}
+
+impl Default for Customization {
+    fn default() -> Self {
+        Self {
+            date_format: DateFormat::default(),
+            time_format: TimeFormat::default(),
+            week_start_day: chrono::Weekday::Mon,
+        }
+    }
 }
 
 impl Customization {
@@ -84,8 +103,7 @@ impl Customization {
     }
 
     pub fn format_date(&self, date: &NaiveDate) -> String {
-        date.format(&self.date_format.to_format_string())
-            .to_string()
+        date.format(self.date_format.to_format_string()).to_string()
     }
 
     pub fn format_datetime(
@@ -116,6 +134,17 @@ impl Customization {
         match self.time_format {
             TimeFormat::H12 => false,
             TimeFormat::H24 => true,
+        }
+    }
+
+    pub fn to_start_of_week(&self, dt: DateTime<Local>) -> DateTime<Local> {
+        to_start_of_week(dt, self.week_start_day)
+    }
+
+    pub fn set_week_start(self, day: chrono::Weekday) -> Self {
+        Self {
+            week_start_day: day,
+            ..self
         }
     }
 }
@@ -172,6 +201,10 @@ impl Customization {
                     ),
                     self.date_format_menu(wrapper),
                 ),
+                menu::Item::new(menu_text_disabled(format!(
+                    "Week starts on {}",
+                    self.week_start_day
+                ))),
             ])
             .max_width(120.0),
         )
