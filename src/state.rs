@@ -1,9 +1,10 @@
-use chrono::{DateTime, Local, TimeDelta};
+use chrono::{DateTime, Duration, Local};
 use serde::{Deserialize, Serialize};
 
 use crate::customization::Customization;
 use crate::entities::{ExtendedMe, Project, ProjectId, Workspace, WorkspaceId};
 use crate::time_entry::TimeEntry;
+use crate::utils::to_start_of_week;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct State {
@@ -74,10 +75,7 @@ impl State {
             return true;
         }
         match self.earliest_entry_time {
-            // Yes, just load 7 days. Yes, we will load more than necessary.
-            // Yes, it's easier than trying to find Monday 00:00:00 of this week
-            // and it won't harm if we load once again.
-            Some(time) => time <= Local::now() - TimeDelta::days(7),
+            Some(time) => time < to_start_of_week(Local::now()),
             None => true,
         }
     }
@@ -96,6 +94,25 @@ impl State {
         );
         self.has_more_entries = earliest.is_some();
         self.earliest_entry_time = earliest.or(self.earliest_entry_time);
+    }
+
+    pub fn week_total(&self) -> Duration {
+        let mon = to_start_of_week(Local::now());
+        let old = self
+            .time_entries
+            .iter()
+            .filter_map(|e| {
+                if e.start >= mon {
+                    Some(e.get_duration())
+                } else {
+                    None
+                }
+            })
+            .sum();
+        match &self.running_entry {
+            None => old,
+            Some(e) => old + e.get_duration(),
+        }
     }
 }
 

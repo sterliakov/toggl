@@ -1,4 +1,5 @@
 use clap::{crate_version, Parser};
+use iced::alignment::Horizontal;
 use iced::keyboard::key::Named as NamedKey;
 use iced::widget::{
     button, center, column, container, horizontal_rule, row, scrollable, text,
@@ -8,6 +9,7 @@ use iced_aw::menu;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{debug, error, info};
+use utils::duration_to_hm;
 
 mod cli;
 mod customization;
@@ -487,8 +489,27 @@ impl App {
                 .max_width(120.0),
             ),
             self.state.customization.view(&Message::CustomizationProxy),
+            self.week_total(),
         ])
+        .width(iced::Length::Fill)
         .into()
+    }
+
+    fn week_total(&self) -> menu::Item<Message, iced::Theme, iced::Renderer> {
+        menu::Item::new(
+            button(
+                text(format!(
+                    "Week total: {}",
+                    duration_to_hm(&self.state.week_total())
+                ))
+                .size(11)
+                .align_x(Horizontal::Right)
+                .width(iced::Length::Fill),
+            )
+            .padding([2, 4])
+            .width(iced::Length::Fill)
+            .style(|_, _| button::Style::default()),
+        )
     }
 
     fn day_group<'a>(
