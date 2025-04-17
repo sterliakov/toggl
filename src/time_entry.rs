@@ -1,15 +1,13 @@
 use chrono::{DateTime, Local};
-use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{button, column, container, row, text};
-use iced::{Color, Element, Length};
+use iced::alignment::Vertical;
+use iced::widget::{button, column, row, text};
+use iced::{Element, Length};
 use log::debug;
 use serde::{Deserialize, Serialize, Serializer};
 
-use crate::client::{Client, Result as NetResult};
-use crate::components::icon_button;
-use crate::project::{MaybeProject, Project, ProjectId};
-use crate::utils::duration_to_hms;
-use crate::workspace::WorkspaceId;
+use crate::entities::{MaybeProject, Project, ProjectId, WorkspaceId};
+use crate::utils::{duration_to_hms, Client, NetResult};
+use crate::widgets::icon_button;
 
 fn datetime_serialize_utc<S: Serializer>(
     x: &DateTime<Local>,
@@ -130,74 +128,86 @@ impl TimeEntry {
         Client::check_status(&mut res).await
     }
 
-    fn duration_string(&self) -> String {
-        let diff = self.stop.unwrap_or_else(|| {
-            Local::now().with_timezone(&self.start.timezone())
-        }) - self.start;
-        duration_to_hms(&diff)
-    }
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct CreateTimeEntry {
-    created_with: String,
-    description: Option<String>,
-    duration: i64,
-    start: DateTime<Local>,
-    workspace_id: WorkspaceId,
-    project_id: Option<ProjectId>,
-}
-
-impl CreateTimeEntry {
-    pub fn new(
+    pub async fn create_running(
         description: Option<String>,
         workspace_id: WorkspaceId,
         project_id: Option<ProjectId>,
-    ) -> Self {
-        Self {
+        client: &Client,
+    ) -> NetResult<()> {
+        debug!("Creating a time entry...");
+        let entry = CreateTimeEntry {
             created_with: "ST-Toggl-Client".to_string(),
             description,
             duration: -1,
             start: Local::now(),
             workspace_id,
             project_id,
-        }
-    }
-
-    pub async fn create(&self, client: &Client) -> NetResult<()> {
-        debug!("Creating a time entry...");
+        };
         let mut res = client
             .post(format!(
                 "{}/api/v9/workspaces/{}/time_entries",
                 Client::BASE_URL,
-                self.workspace_id
+                entry.workspace_id
             ))
-            .body_json(&self)?
+            .body_json(&entry)?
             .send()
             .await?;
         Client::check_status(&mut res).await
     }
+
+    pub async fn duplicate(self, client: &Client) -> NetResult<()> {
+        Self::create_running(
+            self.description,
+            self.workspace_id,
+            self.project_id,
+            client,
+        )
+        .await
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct CreateTimeEntry {
+    created_with: String,
+    description: Option<String>,
+    duration: i64,
+    #[serde(serialize_with = "datetime_serialize_utc")]
+    start: DateTime<Local>,
+    workspace_id: WorkspaceId,
+    project_id: Option<ProjectId>,
 }
 
 #[derive(Clone, Debug)]
 pub enum TimeEntryMessage {
-    Edit(u64),
-    EditRunning,
-    StopRunning,
-    Duplicate(Box<TimeEntry>),
+    Edit(TimeEntry),
+    Duplicate(TimeEntry),
 }
 
 impl TimeEntry {
-    pub fn view(&self, projects: &[Project]) -> Element<TimeEntryMessage> {
-        let project: MaybeProject = projects
+    pub fn duration_string(&self) -> String {
+        let diff = self.stop.unwrap_or_else(|| {
+            Local::now().with_timezone(&self.start.timezone())
+        }) - self.start;
+        duration_to_hms(&diff)
+    }
+
+    pub fn project(&self, projects: &[Project]) -> MaybeProject {
+        projects
             .iter()
             .find(|p| Some(p.id) == self.project_id)
             .cloned()
-            .into();
-        let name = self
-            .description
+            .into()
+    }
+
+    pub fn description_text(&self) -> String {
+        self.description
             .clone()
-            .unwrap_or("<NO DESCRIPTION>".to_string());
+            .unwrap_or_else(|| "<NO DESCRIPTION>".to_string())
+    }
+
+    pub fn view(&self, projects: &[Project]) -> Element<TimeEntryMessage> {
+        let project = self.project(projects);
+        let name = self.description_text();
         button(
             row![
                 column![
@@ -208,9 +218,7 @@ impl TimeEntry {
                 ],
                 icon_button(iced_fonts::Bootstrap::Copy)
                     .style(button::primary)
-                    .on_press_with(|| TimeEntryMessage::Duplicate(Box::new(
-                        self.clone()
-                    )))
+                    .on_press_with(|| TimeEntryMessage::Duplicate(self.clone()))
                     .width(28),
                 text(self.duration_string()).width(Length::Fixed(50f32))
             ]
@@ -221,60 +229,9 @@ impl TimeEntry {
             })
             .align_y(Vertical::Center),
         )
-        .on_press(TimeEntryMessage::Edit(self.id))
+        .on_press_with(|| TimeEntryMessage::Edit(self.clone()))
         .clip(true)
         .style(button::text)
-        .into()
-    }
-
-    pub fn view_running(
-        &self,
-        projects: &[Project],
-    ) -> Element<TimeEntryMessage> {
-        let project: MaybeProject = projects
-            .iter()
-            .find(|p| Some(p.id) == self.project_id)
-            .cloned()
-            .into();
-        let name = self
-            .description
-            .clone()
-            .unwrap_or_else(|| "<NO DESCRIPTION>".to_string());
-        container(
-            row![
-                button(text(name).wrapping(text::Wrapping::None))
-                    .width(Length::Fill)
-                    .style(|_, _| button::Style {
-                        text_color: Color::WHITE,
-                        ..button::Style::default()
-                    })
-                    .on_press(TimeEntryMessage::EditRunning)
-                    .clip(true),
-                column![
-                    text(self.duration_string()).width(Length::Fixed(50f32)),
-                    container(project.project_badge()),
-                ]
-                .align_x(Horizontal::Right)
-                .padding([4, 0]),
-                icon_button(iced_fonts::Bootstrap::Pause)
-                    .style(button::primary)
-                    .on_press(TimeEntryMessage::StopRunning)
-                    .width(Length::Fixed(28.0)),
-            ]
-            .spacing(10)
-            .padding(iced::Padding {
-                right: 10.0,
-                top: 4.0,
-                bottom: 4.0,
-                left: 0.0,
-            })
-            .align_y(Vertical::Center),
-        )
-        .style(|_| container::Style {
-            background: Some(iced::color!(0x161616).into()),
-            text_color: Some(Color::WHITE),
-            ..container::Style::default()
-        })
         .into()
     }
 }
@@ -282,7 +239,7 @@ impl TimeEntry {
 #[cfg(test)]
 mod test {
     use super::TimeEntry;
-    use crate::client::Client;
+    use crate::utils::Client;
 
     fn test_client() -> Client {
         Client::from_email_password(

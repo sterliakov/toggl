@@ -1,5 +1,5 @@
 use iced::widget::text;
-use iced_aw::{badge, Badge};
+use iced_aw::badge;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -25,9 +25,16 @@ impl std::fmt::Display for Project {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+impl Project {
+    pub fn parsed_color(&self) -> iced::Color {
+        iced::Color::parse(&self.color).expect("Project color must be valid")
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum MaybeProject {
     Some(Project),
+    #[default]
     None,
 }
 
@@ -65,19 +72,26 @@ impl From<MaybeProject> for Option<Project> {
 }
 
 impl MaybeProject {
+    pub fn id(&self) -> Option<ProjectId> {
+        match self {
+            Self::Some(p) => Some(p.id),
+            Self::None => None,
+        }
+    }
+
     pub fn project_badge<'a, T>(
         &self,
-    ) -> Badge<'a, T, iced::Theme, iced::Renderer> {
+    ) -> badge::Badge<'a, T, iced::Theme, iced::Renderer> {
         if let Self::Some(project) = self {
-            let color = iced::Color::parse(&project.color)
-                .expect("Project color must be valid");
-            Badge::new(text(project.name.clone()).size(10).line_height(1.0))
-                .style(move |_, _| badge::Style {
+            let color = project.parsed_color();
+            badge(text(project.name.clone()).size(10).line_height(1.0)).style(
+                move |_, _| badge::Style {
                     background: color.into(),
                     ..badge::Style::default()
-                })
+                },
+            )
         } else {
-            Badge::new(text("No project".to_string()).size(10).line_height(1.0))
+            badge(text("No project".to_string()).size(10).line_height(1.0))
                 .style(iced_aw::style::badge::light)
         }
         .height(22)

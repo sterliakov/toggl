@@ -2,7 +2,7 @@ use iced::widget::{button, column, container, scrollable, text, text_input};
 use iced::{Element, Fill, Task as Command};
 use serde::{Deserialize, Serialize};
 
-use crate::client::{Client, Result as NetResult};
+use crate::utils::{Client, NetResult};
 
 #[derive(Clone, Debug, Default)]
 pub struct LoginScreen {
@@ -18,7 +18,6 @@ pub enum LoginScreenMessage {
     Submit,
     Completed(String),
     Error(String),
-    TabPressed(bool),
 }
 
 impl LoginScreen {
@@ -61,13 +60,6 @@ impl LoginScreen {
                 return Command::future(self.clone().submit());
             }
             LoginScreenMessage::Completed(_) => {}
-            LoginScreenMessage::TabPressed(is_shift) => {
-                return if is_shift {
-                    iced::widget::focus_previous()
-                } else {
-                    iced::widget::focus_next()
-                }
-            }
         };
         Command::none()
     }
@@ -83,12 +75,9 @@ impl LoginScreen {
                 "Password must not be empty".to_string(),
             );
         }
-        match Self::call_submit(&self.email, &self.password)
-            .await
-            .map_err(|e| e.to_string())
-        {
+        match Self::call_submit(&self.email, &self.password).await {
             Ok(token) => LoginScreenMessage::Completed(token),
-            Err(e) => LoginScreenMessage::Error(e),
+            Err(e) => LoginScreenMessage::Error(e.to_string()),
         }
     }
 

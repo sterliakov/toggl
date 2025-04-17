@@ -8,7 +8,7 @@ use iced_aw::{DatePicker, TimePicker};
 use iced_fonts::Bootstrap;
 use log::warn;
 
-use crate::components::icon_button;
+use super::icon_button;
 use crate::customization::Customization;
 
 #[derive(Clone, Debug)]

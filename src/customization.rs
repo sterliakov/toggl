@@ -3,7 +3,7 @@ use iced::Task as Command;
 use iced_aw::menu;
 use serde::{Deserialize, Serialize};
 
-use crate::components::{menu_select_item, menu_text, top_level_menu_text};
+use crate::widgets::{menu_select_item, menu_text, top_level_menu_text};
 
 trait LocaleString {
     fn to_format_string(&self) -> String;

@@ -7,7 +7,7 @@ use self_update::cargo_crate_version;
 use self_update::errors::Error as UpdateError;
 pub use self_update::Status as UpdateStatus;
 
-use crate::components::{menu_text, menu_text_disabled};
+use crate::widgets::{menu_text, menu_text_disabled};
 
 #[derive(Clone, Debug)]
 pub enum InstallationMethod {
