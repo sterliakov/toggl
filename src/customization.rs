@@ -24,15 +24,23 @@ trait TogglConvertible<T> {
 )]
 pub enum DateFormat {
     #[default]
-    Dmy,
-    Mdy,
+    DmyHyphen,
+    DmySlash,
+    DmyDot,
+    MdyHyphen,
+    MdySlash,
+    YmdHyphen,
 }
 
 impl LocaleString for DateFormat {
     fn to_format_string(&self) -> &'static str {
         match self {
-            DateFormat::Dmy => "%d-%m-%y",
-            DateFormat::Mdy => "%m-%d-%y",
+            DateFormat::DmyHyphen => "%d-%m-%y",
+            DateFormat::MdyHyphen => "%m-%d-%y",
+            DateFormat::DmySlash => "%d/%m/%y",
+            DateFormat::MdySlash => "%m/%d/%y",
+            DateFormat::DmyDot => "%d.%m.%y",
+            DateFormat::YmdHyphen => "%y-%m-%d",
         }
     }
 }
@@ -40,8 +48,12 @@ impl LocaleString for DateFormat {
 impl std::fmt::Display for DateFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let repr = match self {
-            DateFormat::Dmy => "dd-mm-yyyy",
-            DateFormat::Mdy => "mm-dd-yyyy",
+            DateFormat::DmyHyphen => "dd-mm-yyyy",
+            DateFormat::MdyHyphen => "mm-dd-yyyy",
+            DateFormat::DmySlash => "dd/mm/yyyy",
+            DateFormat::MdySlash => "mm/dd/yyyy",
+            DateFormat::DmyDot => "dd.mm.yyyy",
+            DateFormat::YmdHyphen => "yyyy-mm-dd",
         };
         f.write_str(repr)
     }
@@ -53,8 +65,12 @@ impl TogglConvertible<String> for DateFormat {
     }
     fn from_toggl(value: &String) -> Self {
         match value as &str {
-            "DD-MM-YYYY" => Self::Dmy,
-            "MM-DD-YYYY" => Self::Mdy,
+            "DD-MM-YYYY" => Self::DmyHyphen,
+            "MM-DD-YYYY" => Self::MdyHyphen,
+            "DD/MM/YYYY" => Self::DmySlash,
+            "MM/DD/YYYY" => Self::MdySlash,
+            "DD.MM.YYYY" => Self::DmyDot,
+            "YYYY-MM-DD" => Self::YmdHyphen,
             other => {
                 warn!("Unknown date format: {other}");
                 Self::default()
@@ -64,7 +80,14 @@ impl TogglConvertible<String> for DateFormat {
 }
 
 impl DateFormat {
-    const VALUES: [Self; 2] = [Self::Dmy, Self::Mdy];
+    const VALUES: [Self; 6] = [
+        Self::DmySlash,
+        Self::DmyHyphen,
+        Self::DmyDot,
+        Self::MdySlash,
+        Self::MdyHyphen,
+        Self::YmdHyphen,
+    ];
 }
 
 #[derive(
