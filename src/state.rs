@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::customization::Customization;
 use crate::entities::{ExtendedMe, Project, ProjectId, Workspace, WorkspaceId};
 use crate::time_entry::TimeEntry;
+use crate::utils::{Client, NetResult};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct State {
@@ -45,7 +46,6 @@ impl State {
         let project_id = self
             .default_project
             .filter(|&proj| me.projects.iter().any(|p| p.id == proj));
-        let week_start = me.first_week_day();
         let earliest_entry_time = me.time_entries.iter().map(|e| e.start).min();
         let (running_entry, time_entries) =
             TimeEntry::split_running(if let Some(ws_id) = ws_id {
@@ -66,7 +66,7 @@ impl State {
             default_workspace: ws_id,
             default_project: project_id,
             earliest_entry_time,
-            customization: self.customization.set_week_start(week_start),
+            customization: me.preferences.into(),
             ..self
         }
     }
@@ -177,6 +177,11 @@ impl State {
 
         Ok(())
     }
+
+    pub async fn save_customization(&self) -> NetResult<()> {
+        let client = Client::from_api_token(&self.api_token);
+        self.customization.clone().save(&client).await
+    }
 }
 
 #[cfg(test)]
@@ -184,7 +189,7 @@ mod test {
     use chrono::{Duration, Local, TimeDelta};
 
     use super::State;
-    use crate::entities::{Workspace, WorkspaceId};
+    use crate::entities::{Preferences, Workspace, WorkspaceId};
     use crate::time_entry::TimeEntry;
     use crate::ExtendedMe;
 
@@ -215,7 +220,7 @@ mod test {
             projects: vec![],
             workspaces: vec![ws.clone()],
             time_entries: vec![e_running.clone(), e_stopped, e_foreign.clone()],
-            beginning_of_week: 0,
+            preferences: Preferences::default(),
         };
         let mut state = State::default().update_from_context(me);
         assert_eq!(state.running_entry, Some(e_running));
@@ -254,7 +259,7 @@ mod test {
             projects: vec![],
             workspaces: vec![ws.clone()],
             time_entries: vec![e.clone()],
-            beginning_of_week: 0,
+            preferences: Preferences::default(),
         };
         let state = State::default().update_from_context(me);
         assert_eq!(state.running_entry, None);

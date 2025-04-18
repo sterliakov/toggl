@@ -1,4 +1,5 @@
 use clap::{crate_version, Parser};
+use entities::Preferences;
 use iced::alignment::Horizontal;
 use iced::keyboard::key::Named as NamedKey;
 use iced::widget::{
@@ -262,7 +263,10 @@ impl App {
 
                 Message::CustomizationProxy(inner) => match inner {
                     CustomizationMessage::Save => {
-                        return self.save_state();
+                        return Command::batch(vec![
+                            self.save_state(),
+                            self.save_customization(),
+                        ]);
                     }
                     other => {
                         return self
@@ -348,6 +352,16 @@ impl App {
 
     fn save_state(&self) -> Command<Message> {
         Command::future(self.state.clone().save()).map(|_| Message::Discarded)
+    }
+
+    fn save_customization(&self) -> Command<Message> {
+        let state = self.state.clone();
+        Command::future(async move {
+            match state.save_customization().await {
+                Ok(_) => Message::Discarded,
+                Err(e) => Message::Error(e.to_string()),
+            }
+        })
     }
 
     fn load_entries(&self) -> Command<Message> {
@@ -572,10 +586,16 @@ impl App {
 
     async fn load_everything(api_token: String) -> Message {
         let client = Client::from_api_token(&api_token);
-        ExtendedMe::load(&client)
-            .await
-            .map(Message::DataFetched)
-            .unwrap_or_else(|e| Message::Error(e.to_string()))
+        match futures::try_join!(
+            Preferences::load(&client),
+            ExtendedMe::load(&client),
+        ) {
+            Ok((prefs, mut me)) => {
+                me.preferences = prefs;
+                Message::DataFetched(me)
+            }
+            Err(e) => Message::Error(e.to_string()),
+        }
     }
 
     fn subscription(&self) -> iced::Subscription<Message> {

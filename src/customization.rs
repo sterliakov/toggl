@@ -1,15 +1,22 @@
-use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone};
+use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone, Weekday};
 use iced::Task as Command;
 use iced_aw::menu;
+use log::warn;
 use serde::{Deserialize, Serialize};
 
-use crate::utils::to_start_of_week;
+use crate::entities::Preferences;
+use crate::utils::{to_start_of_week, Client, NetResult};
 use crate::widgets::{
     menu_select_item, menu_text, menu_text_disabled, top_level_menu_text,
 };
 
 trait LocaleString {
     fn to_format_string(&self) -> &'static str;
+}
+
+trait TogglConvertible<T> {
+    fn to_toggl(&self) -> T;
+    fn from_toggl(value: &T) -> Self;
 }
 
 #[derive(
@@ -20,6 +27,7 @@ pub enum DateFormat {
     Dmy,
     Mdy,
 }
+
 impl LocaleString for DateFormat {
     fn to_format_string(&self) -> &'static str {
         match self {
@@ -28,6 +36,7 @@ impl LocaleString for DateFormat {
         }
     }
 }
+
 impl std::fmt::Display for DateFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let repr = match self {
@@ -37,6 +46,23 @@ impl std::fmt::Display for DateFormat {
         f.write_str(repr)
     }
 }
+
+impl TogglConvertible<String> for DateFormat {
+    fn to_toggl(&self) -> String {
+        self.to_string().to_uppercase()
+    }
+    fn from_toggl(value: &String) -> Self {
+        match value as &str {
+            "DD-MM-YYYY" => Self::Dmy,
+            "MM-DD-YYYY" => Self::Mdy,
+            other => {
+                warn!("Unknown date format: {other}");
+                Self::default()
+            }
+        }
+    }
+}
+
 impl DateFormat {
     const VALUES: [Self; 2] = [Self::Dmy, Self::Mdy];
 }
@@ -49,6 +75,7 @@ pub enum TimeFormat {
     #[default]
     H24,
 }
+
 impl LocaleString for TimeFormat {
     fn to_format_string(&self) -> &'static str {
         match self {
@@ -57,6 +84,7 @@ impl LocaleString for TimeFormat {
         }
     }
 }
+
 impl std::fmt::Display for TimeFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let repr = match self {
@@ -64,6 +92,35 @@ impl std::fmt::Display for TimeFormat {
             TimeFormat::H24 => "24-hour",
         };
         f.write_str(repr)
+    }
+}
+
+impl TogglConvertible<String> for TimeFormat {
+    fn to_toggl(&self) -> String {
+        match self {
+            Self::H24 => "H:mm".to_string(),
+            Self::H12 => "h:mm A".to_string(),
+        }
+    }
+    fn from_toggl(value: &String) -> Self {
+        match value as &str {
+            "H:mm" => Self::H24,
+            "h:mm A" => Self::H12,
+            other => {
+                warn!("Unknown date format: {other}");
+                Self::default()
+            }
+        }
+    }
+}
+
+impl TogglConvertible<u8> for Weekday {
+    fn to_toggl(&self) -> u8 {
+        self.number_from_sunday().try_into().unwrap()
+    }
+    fn from_toggl(value: &u8) -> Self {
+        let off_by_one: Self = (*value).try_into().expect("bad start day");
+        off_by_one.pred()
     }
 }
 
@@ -89,6 +146,26 @@ impl Default for Customization {
             date_format: DateFormat::default(),
             time_format: TimeFormat::default(),
             week_start_day: chrono::Weekday::Mon,
+        }
+    }
+}
+
+impl From<Customization> for Preferences {
+    fn from(value: Customization) -> Self {
+        Preferences {
+            date_format: value.date_format.to_toggl(),
+            time_format: value.time_format.to_toggl(),
+            beginning_of_week: value.week_start_day.to_toggl(),
+        }
+    }
+}
+
+impl From<Preferences> for Customization {
+    fn from(value: Preferences) -> Self {
+        Self {
+            date_format: DateFormat::from_toggl(&value.date_format),
+            time_format: TimeFormat::from_toggl(&value.time_format),
+            week_start_day: Weekday::from_toggl(&value.beginning_of_week),
         }
     }
 }
@@ -141,11 +218,9 @@ impl Customization {
         to_start_of_week(dt, self.week_start_day)
     }
 
-    pub fn set_week_start(self, day: chrono::Weekday) -> Self {
-        Self {
-            week_start_day: day,
-            ..self
-        }
+    pub async fn save(self, client: &Client) -> NetResult<()> {
+        let prefs: Preferences = self.into();
+        prefs.save(client).await
     }
 }
 
