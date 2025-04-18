@@ -38,7 +38,6 @@ This app is built with [iced](https://github.com/iced-rs/iced) framework.
 
 ## Installation
 
-<!--
 ### NPM
 
 This app is packaged on `npm` under umbrella package that should resolve
@@ -62,7 +61,6 @@ Or get a pre-built binary with amazing [`cargo-binstall`](https://github.com/car
 ```bash
 cargo binstall toggl-tracker
 ```
--->
 
 ### Just get a binary
 
