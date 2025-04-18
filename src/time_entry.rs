@@ -271,6 +271,9 @@ mod test {
         let (running, entries) = TimeEntry::split_running(entries);
         assert!(running.is_none());
 
+        // Respect API limits
+        async_std::task::sleep(std::time::Duration::from_secs(1)).await;
+
         let mut last = entries[0].clone();
         last.description = Some("Other".to_string());
         last.save(&client).await.expect("update");
@@ -284,6 +287,7 @@ mod test {
             TimeEntry::load(None, &client).await.expect("get entries");
         assert_eq!(entries.len(), initial_count);
 
+        async_std::task::sleep(std::time::Duration::from_secs(1)).await;
         TimeEntry::load(entries.last().map(|e| e.start), &client)
             .await
             .expect("get older");
