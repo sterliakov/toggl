@@ -1,13 +1,13 @@
 use log::info;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
+use super::WorkspaceId;
 use crate::entities::{Preferences, Project, Workspace};
 use crate::time_entry::TimeEntry;
 use crate::utils::{Client, NetResult};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct ExtendedMe {
-    pub api_token: String,
     #[serde(default)]
     pub projects: Vec<Project>,
     #[serde(default)]
@@ -16,6 +16,8 @@ pub struct ExtendedMe {
     pub time_entries: Vec<TimeEntry>,
     #[serde(default)]
     pub beginning_of_week: u8,
+    #[serde(default)]
+    pub default_workspace_id: Option<WorkspaceId>,
     #[serde(skip)]
     pub preferences: Preferences,
 }

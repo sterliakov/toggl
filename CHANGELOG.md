@@ -1,5 +1,6 @@
 ## 0.2.0-beta.0
 
+* bugfix: fixed crash when no projects exist
 * feat: improved top menu bar behaviour
 * feat: added daily display of total tracked time
 * feat: reduced the font size
@@ -14,7 +15,9 @@
 * feat: added project badge to running entry row
 * feat: added Cargo and NPM as distribution channels
 * feat: added self-update support
-* bugfix: fixed crash when no projects exist
+* feat: date&time formats and default workspace selection are now synchronized
+  with Toggl profile
+* feat: beginning of week can be customized (synchronized with Toggl data)
 
 ## 0.1.2
 

@@ -3,7 +3,7 @@ use iced::Task as Command;
 use iced_aw::menu;
 use serde::{Deserialize, Serialize};
 
-use crate::entities::Preferences;
+use crate::entities::{Preferences, WorkspaceId};
 use crate::utils::{to_start_of_week, Client, NetResult};
 use crate::widgets::{menu_select_item, menu_text, top_level_menu_text};
 
@@ -103,9 +103,13 @@ impl Customization {
         to_start_of_week(dt, *self.week_start_day)
     }
 
-    pub async fn save(self, client: &Client) -> NetResult<()> {
+    pub async fn save(
+        self,
+        default_workspace_id: Option<WorkspaceId>,
+        client: &Client,
+    ) -> NetResult<()> {
         let prefs: Preferences = self.into();
-        prefs.save(client).await
+        prefs.save(default_workspace_id, client).await
     }
 }
 

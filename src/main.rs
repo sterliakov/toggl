@@ -309,7 +309,11 @@ impl App {
                 }
                 Message::SelectWorkspace(ws_id) => {
                     self.state.default_workspace = Some(ws_id);
-                    return self.save_state().chain(self.load_entries());
+                    return Command::batch(vec![
+                        self.save_state(),
+                        self.save_customization(),
+                    ])
+                    .chain(self.load_entries());
                 }
                 Message::SelectProject(project_id) => {
                     self.state.default_project = project_id;

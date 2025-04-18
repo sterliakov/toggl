@@ -1,6 +1,7 @@
 use log::info;
 use serde::{Deserialize, Serialize};
 
+use super::WorkspaceId;
 use crate::utils::{Client, NetResult};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -32,10 +33,14 @@ impl Preferences {
         rsp.body_json().await
     }
 
-    pub async fn save(&self, client: &Client) -> NetResult<()> {
+    pub async fn save(
+        &self,
+        default_workspace_id: Option<WorkspaceId>,
+        client: &Client,
+    ) -> NetResult<()> {
         futures::try_join!(
             self.save_base(client),
-            self.save_beginning_of_week(client)
+            self.save_profile(default_workspace_id, client)
         )?;
         Ok(())
     }
@@ -51,14 +56,19 @@ impl Preferences {
         Client::check_status(&mut rsp).await
     }
 
-    async fn save_beginning_of_week(&self, client: &Client) -> NetResult<()> {
+    async fn save_profile(
+        &self,
+        default_workspace_id: Option<WorkspaceId>,
+        client: &Client,
+    ) -> NetResult<()> {
         info!("Saving beginning of week...");
         let mut rsp = client
             .put(format!("{}/api/v9/me", Client::BASE_URL))
-            .body_json(&BeginningOfWeek {
+            .body_json(&ProfilePart {
                 beginning_of_week: self.beginning_of_week,
+                default_workspace_id,
             })
-            .expect("serialize BeginningOfWeek")
+            .expect("serialize ProfilePart")
             .send()
             .await?;
         Client::check_status(&mut rsp).await
@@ -66,6 +76,7 @@ impl Preferences {
 }
 
 #[derive(Serialize)]
-struct BeginningOfWeek {
+struct ProfilePart {
     beginning_of_week: u8,
+    default_workspace_id: Option<WorkspaceId>,
 }
