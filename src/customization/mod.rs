@@ -1,12 +1,19 @@
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone};
 use iced::Task as Command;
 use iced_aw::menu;
-use log::warn;
 use serde::{Deserialize, Serialize};
 
 use crate::entities::Preferences;
 use crate::utils::{to_start_of_week, Client, NetResult};
 use crate::widgets::{menu_select_item, menu_text, top_level_menu_text};
+
+mod date_format;
+mod time_format;
+mod weekday;
+
+pub use date_format::DateFormat;
+pub use time_format::TimeFormat;
+pub use weekday::WeekDay;
 
 trait LocaleString {
     fn to_format_string(&self) -> &'static str;
@@ -17,174 +24,15 @@ trait TogglConvertible<T> {
     fn from_toggl(value: &T) -> Self;
 }
 
-#[derive(
-    Clone, Copy, Debug, Eq, PartialEq, Default, Serialize, Deserialize,
-)]
-pub enum DateFormat {
-    #[default]
-    DmyHyphen,
-    DmySlash,
-    DmyDot,
-    MdyHyphen,
-    MdySlash,
-    YmdHyphen,
-}
-
-impl LocaleString for DateFormat {
-    fn to_format_string(&self) -> &'static str {
-        match self {
-            DateFormat::DmyHyphen => "%d-%m-%y",
-            DateFormat::MdyHyphen => "%m-%d-%y",
-            DateFormat::DmySlash => "%d/%m/%y",
-            DateFormat::MdySlash => "%m/%d/%y",
-            DateFormat::DmyDot => "%d.%m.%y",
-            DateFormat::YmdHyphen => "%y-%m-%d",
-        }
-    }
-}
-
-impl std::fmt::Display for DateFormat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let repr = match self {
-            DateFormat::DmyHyphen => "dd-mm-yyyy",
-            DateFormat::MdyHyphen => "mm-dd-yyyy",
-            DateFormat::DmySlash => "dd/mm/yyyy",
-            DateFormat::MdySlash => "mm/dd/yyyy",
-            DateFormat::DmyDot => "dd.mm.yyyy",
-            DateFormat::YmdHyphen => "yyyy-mm-dd",
-        };
-        f.write_str(repr)
-    }
-}
-
-impl TogglConvertible<String> for DateFormat {
-    fn to_toggl(&self) -> String {
-        self.to_string().to_uppercase()
-    }
-    fn from_toggl(value: &String) -> Self {
-        match value as &str {
-            "DD-MM-YYYY" => Self::DmyHyphen,
-            "MM-DD-YYYY" => Self::MdyHyphen,
-            "DD/MM/YYYY" => Self::DmySlash,
-            "MM/DD/YYYY" => Self::MdySlash,
-            "DD.MM.YYYY" => Self::DmyDot,
-            "YYYY-MM-DD" => Self::YmdHyphen,
-            other => {
-                warn!("Unknown date format: {other}");
-                Self::default()
-            }
-        }
-    }
-}
-
-impl DateFormat {
-    const VALUES: [Self; 6] = [
-        Self::DmySlash,
-        Self::DmyHyphen,
-        Self::DmyDot,
-        Self::MdySlash,
-        Self::MdyHyphen,
-        Self::YmdHyphen,
-    ];
-}
-
-#[derive(
-    Clone, Copy, Debug, Eq, PartialEq, Default, Serialize, Deserialize,
-)]
-pub enum TimeFormat {
-    H12,
-    #[default]
-    H24,
-}
-
-impl LocaleString for TimeFormat {
-    fn to_format_string(&self) -> &'static str {
-        match self {
-            TimeFormat::H12 => "%I:%M:%S %p",
-            TimeFormat::H24 => "%T",
-        }
-    }
-}
-
-impl std::fmt::Display for TimeFormat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let repr = match self {
-            TimeFormat::H12 => "12-hour",
-            TimeFormat::H24 => "24-hour",
-        };
-        f.write_str(repr)
-    }
-}
-
-impl TogglConvertible<String> for TimeFormat {
-    fn to_toggl(&self) -> String {
-        match self {
-            Self::H24 => "H:mm".to_string(),
-            Self::H12 => "h:mm A".to_string(),
-        }
-    }
-    fn from_toggl(value: &String) -> Self {
-        match value as &str {
-            "H:mm" => Self::H24,
-            "h:mm A" => Self::H12,
-            other => {
-                warn!("Unknown date format: {other}");
-                Self::default()
-            }
-        }
-    }
-}
-
-impl TimeFormat {
-    const VALUES: [Self; 2] = [Self::H12, Self::H24];
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct WeekDay(pub chrono::Weekday);
-
-impl Default for WeekDay {
-    fn default() -> Self {
-        Self(chrono::Weekday::Mon)
-    }
-}
-
-impl std::ops::Deref for WeekDay {
-    type Target = chrono::Weekday;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl TogglConvertible<u8> for WeekDay {
-    // Toggl uses Sun = 0 while chrono uses Mon = 1
-    fn to_toggl(&self) -> u8 {
-        self.0.num_days_from_sunday().try_into().unwrap()
-    }
-    fn from_toggl(value: &u8) -> Self {
-        let off_by_one: chrono::Weekday =
-            (*value).try_into().expect("bad start day");
-        Self(off_by_one.pred())
-    }
-}
-
-impl WeekDay {
-    const VALUES: [Self; 7] = [
-        Self(chrono::Weekday::Mon),
-        Self(chrono::Weekday::Tue),
-        Self(chrono::Weekday::Wed),
-        Self(chrono::Weekday::Thu),
-        Self(chrono::Weekday::Fri),
-        Self(chrono::Weekday::Sat),
-        Self(chrono::Weekday::Sun),
-    ];
-}
-
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Customization {
     date_format: DateFormat,
     time_format: TimeFormat,
+
+    #[cfg(not(test))]
     week_start_day: WeekDay,
+    #[cfg(test)]
+    pub week_start_day: WeekDay,
 }
 
 impl From<Customization> for Preferences {

@@ -192,6 +192,7 @@ mod test {
     use chrono::{Duration, Local, TimeDelta};
 
     use super::State;
+    use crate::customization::WeekDay;
     use crate::entities::{Preferences, Workspace, WorkspaceId};
     use crate::time_entry::TimeEntry;
     use crate::ExtendedMe;
@@ -273,5 +274,22 @@ mod test {
         assert_eq!(state.week_total(), Duration::zero());
         assert!(state.has_more_entries);
         assert!(state.has_whole_last_week());
+    }
+
+    #[test]
+    fn test_state_preferences() {
+        let me = ExtendedMe {
+            api_token: "token".to_string(),
+            projects: vec![],
+            workspaces: vec![],
+            time_entries: vec![],
+            beginning_of_week: 2, // Tue
+            preferences: Preferences::default(),
+        };
+        let state = State::default().update_from_context(me);
+        assert_eq!(
+            state.customization.week_start_day,
+            WeekDay(chrono::Weekday::Tue)
+        );
     }
 }
