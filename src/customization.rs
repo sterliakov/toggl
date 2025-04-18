@@ -1,4 +1,4 @@
-use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone, Weekday};
+use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone};
 use iced::Task as Command;
 use iced_aw::menu;
 use log::warn;
@@ -6,9 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::entities::Preferences;
 use crate::utils::{to_start_of_week, Client, NetResult};
-use crate::widgets::{
-    menu_select_item, menu_text, menu_text_disabled, top_level_menu_text,
-};
+use crate::widgets::{menu_select_item, menu_text, top_level_menu_text};
 
 trait LocaleString {
     fn to_format_string(&self) -> &'static str;
@@ -137,40 +135,56 @@ impl TogglConvertible<String> for TimeFormat {
     }
 }
 
-impl TogglConvertible<u8> for Weekday {
-    fn to_toggl(&self) -> u8 {
-        self.number_from_sunday().try_into().unwrap()
-    }
-    fn from_toggl(value: &u8) -> Self {
-        let off_by_one: Self = (*value).try_into().expect("bad start day");
-        off_by_one.pred()
-    }
-}
-
 impl TimeFormat {
     const VALUES: [Self; 2] = [Self::H12, Self::H24];
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct WeekDay(pub chrono::Weekday);
+
+impl Default for WeekDay {
+    fn default() -> Self {
+        Self(chrono::Weekday::Mon)
+    }
+}
+
+impl std::ops::Deref for WeekDay {
+    type Target = chrono::Weekday;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl TogglConvertible<u8> for WeekDay {
+    // Toggl uses Sun = 0 while chrono uses Mon = 1
+    fn to_toggl(&self) -> u8 {
+        self.0.num_days_from_sunday().try_into().unwrap()
+    }
+    fn from_toggl(value: &u8) -> Self {
+        let off_by_one: chrono::Weekday =
+            (*value).try_into().expect("bad start day");
+        Self(off_by_one.pred())
+    }
+}
+
+impl WeekDay {
+    const VALUES: [Self; 7] = [
+        Self(chrono::Weekday::Mon),
+        Self(chrono::Weekday::Tue),
+        Self(chrono::Weekday::Wed),
+        Self(chrono::Weekday::Thu),
+        Self(chrono::Weekday::Fri),
+        Self(chrono::Weekday::Sat),
+        Self(chrono::Weekday::Sun),
+    ];
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Customization {
     date_format: DateFormat,
     time_format: TimeFormat,
-    #[serde(default = "default_week_day")]
-    week_start_day: chrono::Weekday,
-}
-
-const fn default_week_day() -> chrono::Weekday {
-    chrono::Weekday::Mon
-}
-
-impl Default for Customization {
-    fn default() -> Self {
-        Self {
-            date_format: DateFormat::default(),
-            time_format: TimeFormat::default(),
-            week_start_day: chrono::Weekday::Mon,
-        }
-    }
+    week_start_day: WeekDay,
 }
 
 impl From<Customization> for Preferences {
@@ -188,7 +202,7 @@ impl From<Preferences> for Customization {
         Self {
             date_format: DateFormat::from_toggl(&value.date_format),
             time_format: TimeFormat::from_toggl(&value.time_format),
-            week_start_day: Weekday::from_toggl(&value.beginning_of_week),
+            week_start_day: WeekDay::from_toggl(&value.beginning_of_week),
         }
     }
 }
@@ -238,7 +252,7 @@ impl Customization {
     }
 
     pub fn to_start_of_week(&self, dt: DateTime<Local>) -> DateTime<Local> {
-        to_start_of_week(dt, self.week_start_day)
+        to_start_of_week(dt, *self.week_start_day)
     }
 
     pub async fn save(self, client: &Client) -> NetResult<()> {
@@ -251,6 +265,7 @@ impl Customization {
 pub enum CustomizationMessage {
     SelectTimeFormat(TimeFormat),
     SelectDateFormat(DateFormat),
+    SelectWeekBeginning(WeekDay),
     Discarded,
     Save,
 }
@@ -267,6 +282,10 @@ impl Customization {
             }
             CustomizationMessage::SelectDateFormat(fmt) => {
                 self.date_format = fmt;
+                Command::done(CustomizationMessage::Save)
+            }
+            CustomizationMessage::SelectWeekBeginning(day) => {
+                self.week_start_day = day;
                 Command::done(CustomizationMessage::Save)
             }
             CustomizationMessage::Discarded | CustomizationMessage::Save => {
@@ -299,10 +318,13 @@ impl Customization {
                     ),
                     self.date_format_menu(wrapper),
                 ),
-                menu::Item::new(menu_text_disabled(format!(
-                    "Week starts on {}",
-                    self.week_start_day
-                ))),
+                menu::Item::with_menu(
+                    menu_text(
+                        "Week beginning",
+                        wrapper(CustomizationMessage::Discarded),
+                    ),
+                    self.week_beginning_menu(wrapper),
+                ),
             ])
             .max_width(120.0),
         )
@@ -339,6 +361,25 @@ impl Customization {
                         f,
                         self.date_format == *f,
                         wrapper(CustomizationMessage::SelectDateFormat(*f)),
+                    )
+                })
+                .collect(),
+        )
+        .max_width(120f32)
+    }
+
+    fn week_beginning_menu<'a, T: 'a + Clone>(
+        &'a self,
+        wrapper: &'a impl Fn(CustomizationMessage) -> T,
+    ) -> menu::Menu<'a, T, iced::Theme, iced::Renderer> {
+        menu::Menu::new(
+            WeekDay::VALUES
+                .iter()
+                .map(|f| {
+                    menu_select_item(
+                        **f,
+                        self.week_start_day == *f,
+                        wrapper(CustomizationMessage::SelectWeekBeginning(*f)),
                     )
                 })
                 .collect(),

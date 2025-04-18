@@ -66,7 +66,10 @@ impl State {
             default_workspace: ws_id,
             default_project: project_id,
             earliest_entry_time,
-            customization: me.preferences.into(),
+            customization: me
+                .preferences
+                .with_beginning_of_week(me.beginning_of_week)
+                .into(),
             ..self
         }
     }
@@ -220,6 +223,7 @@ mod test {
             projects: vec![],
             workspaces: vec![ws.clone()],
             time_entries: vec![e_running.clone(), e_stopped, e_foreign.clone()],
+            beginning_of_week: 0,
             preferences: Preferences::default(),
         };
         let mut state = State::default().update_from_context(me);
@@ -259,6 +263,7 @@ mod test {
             projects: vec![],
             workspaces: vec![ws.clone()],
             time_entries: vec![e.clone()],
+            beginning_of_week: 0,
             preferences: Preferences::default(),
         };
         let state = State::default().update_from_context(me);

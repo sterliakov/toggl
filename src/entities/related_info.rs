@@ -14,6 +14,8 @@ pub struct ExtendedMe {
     pub workspaces: Vec<Workspace>,
     #[serde(default)]
     pub time_entries: Vec<TimeEntry>,
+    #[serde(default)]
+    pub beginning_of_week: u8,
     #[serde(skip)]
     pub preferences: Preferences,
 }
