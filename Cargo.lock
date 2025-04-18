@@ -5377,6 +5377,7 @@ dependencies = [
  "clap",
  "directories-next",
  "env_logger",
+ "futures",
  "iced",
  "iced_aw",
  "iced_fonts 0.2.1",

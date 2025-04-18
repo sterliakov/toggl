@@ -6,6 +6,7 @@ chrono = {version = "0.4.38", features = ["serde", "unstable-locales"]}
 clap = {version = "4.5.36", features = ["cargo", "derive"]}
 directories-next = "2.0.0"
 env_logger = "0.11.5"
+futures = "0.3.31"
 iced = {version = "0.13.1", features = ["async-std", "debug", "advanced", "image"]}
 iced_aw = {version = "0.12.2", features = ["badge", "menu", "date_picker", "time_picker"], default-features = false}
 iced_fonts = {version = "0.2.1", features = ["bootstrap", "required"]}

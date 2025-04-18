@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::customization::Customization;
 use crate::entities::{ExtendedMe, Project, ProjectId, Workspace, WorkspaceId};
 use crate::time_entry::TimeEntry;
-use crate::utils::to_start_of_week;
+use crate::utils::{Client, NetResult};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct State {
@@ -39,8 +39,8 @@ impl std::fmt::Display for StatePersistenceError {
 
 impl State {
     pub fn update_from_context(self, me: ExtendedMe) -> Self {
-        let ws_id = self
-            .default_workspace
+        let ws_id = me
+            .default_workspace_id
             .filter(|&ws| me.workspaces.iter().any(|w| w.id == ws))
             .or_else(|| me.workspaces.first().map(|ws| ws.id));
         let project_id = self
@@ -66,6 +66,10 @@ impl State {
             default_workspace: ws_id,
             default_project: project_id,
             earliest_entry_time,
+            customization: me
+                .preferences
+                .with_beginning_of_week(me.beginning_of_week)
+                .into(),
             ..self
         }
     }
@@ -75,7 +79,9 @@ impl State {
             return true;
         }
         match self.earliest_entry_time {
-            Some(time) => time < to_start_of_week(Local::now()),
+            Some(time) => {
+                time < self.customization.to_start_of_week(Local::now())
+            }
             None => true,
         }
     }
@@ -97,7 +103,7 @@ impl State {
     }
 
     pub fn week_total(&self) -> Duration {
-        let mon = to_start_of_week(Local::now());
+        let mon = self.customization.to_start_of_week(Local::now());
         let old = self
             .time_entries
             .iter()
@@ -174,6 +180,14 @@ impl State {
 
         Ok(())
     }
+
+    pub async fn save_customization(&self) -> NetResult<()> {
+        let client = Client::from_api_token(&self.api_token);
+        self.customization
+            .clone()
+            .save(self.default_workspace, &client)
+            .await
+    }
 }
 
 #[cfg(test)]
@@ -181,7 +195,9 @@ mod test {
     use chrono::{Duration, Local, TimeDelta};
 
     use super::State;
-    use crate::entities::{Workspace, WorkspaceId};
+    use crate::customization::WeekDay;
+    use crate::entities::{Preferences, Workspace, WorkspaceId};
+    use crate::test::test_client;
     use crate::time_entry::TimeEntry;
     use crate::ExtendedMe;
 
@@ -208,10 +224,12 @@ mod test {
             ..TimeEntry::default()
         };
         let me = ExtendedMe {
-            api_token: "token".to_string(),
             projects: vec![],
             workspaces: vec![ws.clone()],
             time_entries: vec![e_running.clone(), e_stopped, e_foreign.clone()],
+            beginning_of_week: 0,
+            default_workspace_id: Some(WorkspaceId::new(1)),
+            preferences: Preferences::default(),
         };
         let mut state = State::default().update_from_context(me);
         assert_eq!(state.running_entry, Some(e_running));
@@ -246,10 +264,12 @@ mod test {
             ..TimeEntry::default()
         };
         let me = ExtendedMe {
-            api_token: "token".to_string(),
             projects: vec![],
             workspaces: vec![ws.clone()],
             time_entries: vec![e.clone()],
+            beginning_of_week: 0,
+            default_workspace_id: Some(WorkspaceId::new(1)),
+            preferences: Preferences::default(),
         };
         let state = State::default().update_from_context(me);
         assert_eq!(state.running_entry, None);
@@ -258,5 +278,73 @@ mod test {
         assert_eq!(state.week_total(), Duration::zero());
         assert!(state.has_more_entries);
         assert!(state.has_whole_last_week());
+    }
+
+    #[test]
+    fn test_state_preferences() {
+        let me = ExtendedMe {
+            projects: vec![],
+            workspaces: vec![],
+            time_entries: vec![],
+            beginning_of_week: 2, // Tue
+            default_workspace_id: Some(WorkspaceId::new(1)),
+            preferences: Preferences::default(),
+        };
+        let state = State::default().update_from_context(me);
+        assert_eq!(
+            state.customization.week_start_day,
+            WeekDay(chrono::Weekday::Tue)
+        );
+    }
+
+    #[test]
+    fn test_state_workspace_default() {
+        let ws1 = Workspace {
+            id: WorkspaceId::new(10),
+            ..Workspace::default()
+        };
+        let ws2 = Workspace {
+            id: WorkspaceId::new(11),
+            ..Workspace::default()
+        };
+        let mut me = ExtendedMe {
+            projects: vec![],
+            workspaces: vec![ws1.clone(), ws2.clone()],
+            time_entries: vec![],
+            beginning_of_week: 2, // Tue
+            default_workspace_id: Some(ws2.id),
+            preferences: Preferences::default(),
+        };
+
+        let state = State::default().update_from_context(me.clone());
+        assert_eq!(state.default_workspace, Some(ws2.id));
+
+        me.default_workspace_id = None;
+        let state = State::default().update_from_context(me.clone());
+        assert_eq!(state.default_workspace, Some(ws1.id));
+
+        me.default_workspace_id = Some(WorkspaceId::new(0)); // Not found
+        let state = State::default().update_from_context(me);
+        assert_eq!(state.default_workspace, Some(ws1.id));
+    }
+
+    #[async_std::test]
+    async fn test_crud() {
+        let client = test_client();
+        let me = ExtendedMe::load(&client).await.expect("get me");
+        let state = State::default().update_from_context(me);
+        assert!(state.default_workspace.is_some());
+
+        let mut customization = state.customization;
+        let new_day = WeekDay((*customization.week_start_day).succ());
+        customization.week_start_day = new_day;
+        customization
+            .save(state.default_workspace, &client)
+            .await
+            .expect("save customization");
+
+        let me = ExtendedMe::load(&client).await.expect("get me");
+        let state = State::default().update_from_context(me);
+        assert_eq!(state.customization.week_start_day, new_day);
     }
 }

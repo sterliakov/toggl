@@ -1,6 +1,6 @@
 use chrono::{
     DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime,
-    TimeZone,
+    TimeDelta, TimeZone, Weekday,
 };
 use iced::keyboard::Modifiers;
 
@@ -23,17 +23,26 @@ pub fn duration_to_hm(duration: &Duration) -> String {
     format!("{}:{:0>2}", hours, minutes)
 }
 
-pub fn to_start_of_week(date: DateTime<Local>) -> DateTime<Local> {
-    // TODO: start of week is configurable in toggl API, use it
+pub fn to_start_of_week(
+    date: DateTime<Local>,
+    begin_day: Weekday,
+) -> DateTime<Local> {
     let mon_naive = NaiveDate::from_isoywd_opt(
         date.year(),
         date.iso_week().week(),
-        chrono::Weekday::Mon,
+        Weekday::Mon,
     )
     .unwrap();
-    Local
+    let monday = Local
         .from_local_datetime(&NaiveDateTime::new(mon_naive, NaiveTime::MIN))
-        .unwrap()
+        .unwrap();
+    let offset: i64 = begin_day.num_days_from_monday().into();
+    if date.weekday().num_days_from_monday() >= begin_day.num_days_from_monday()
+    {
+        monday + TimeDelta::days(offset)
+    } else {
+        monday - TimeDelta::days(7i64 - offset)
+    }
 }
 
 pub trait ExactModifiers {
@@ -64,14 +73,51 @@ mod test {
         let cases = [
             (
                 Local.with_ymd_and_hms(2025, 4, 17, 10, 11, 12).unwrap(),
+                Weekday::Mon,
+                "2025-04-14T00:00:00",
+            ),
+            (
+                Local.with_ymd_and_hms(2025, 4, 14, 10, 11, 12).unwrap(),
+                Weekday::Mon,
                 "2025-04-14T00:00:00",
             ),
             (
                 Local.with_ymd_and_hms(2022, 3, 2, 10, 11, 12).unwrap(),
+                Weekday::Mon,
                 "2022-02-28T00:00:00",
             ),
+            (
+                Local.with_ymd_and_hms(2025, 4, 17, 10, 11, 12).unwrap(),
+                Weekday::Sun,
+                "2025-04-13T00:00:00",
+            ),
+            (
+                Local.with_ymd_and_hms(2025, 4, 13, 10, 11, 12).unwrap(),
+                Weekday::Sun,
+                "2025-04-13T00:00:00",
+            ),
+            (
+                Local.with_ymd_and_hms(2025, 4, 12, 10, 11, 12).unwrap(),
+                Weekday::Sun,
+                "2025-04-06T00:00:00",
+            ),
+            (
+                Local.with_ymd_and_hms(2025, 4, 17, 10, 11, 12).unwrap(),
+                Weekday::Wed,
+                "2025-04-16T00:00:00",
+            ),
+            (
+                Local.with_ymd_and_hms(2025, 4, 16, 10, 11, 12).unwrap(),
+                Weekday::Wed,
+                "2025-04-16T00:00:00",
+            ),
+            (
+                Local.with_ymd_and_hms(2025, 4, 15, 10, 11, 12).unwrap(),
+                Weekday::Wed,
+                "2025-04-09T00:00:00",
+            ),
         ];
-        for (d, res) in cases {
+        for (d, day, res) in cases {
             let offset = d.offset().local_minus_utc();
             let tz_suffix = duration_to_hm(&TimeDelta::seconds(offset.into()));
             let tz_suffix = format!(
@@ -80,7 +126,7 @@ mod test {
                 tz_suffix
             );
             assert_eq!(
-                to_start_of_week(d).to_rfc3339(),
+                to_start_of_week(d, day).to_rfc3339(),
                 format!("{res}{tz_suffix}")
             )
         }

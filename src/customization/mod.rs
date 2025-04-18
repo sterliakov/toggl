@@ -3,75 +3,56 @@ use iced::Task as Command;
 use iced_aw::menu;
 use serde::{Deserialize, Serialize};
 
+use crate::entities::{Preferences, WorkspaceId};
+use crate::utils::{to_start_of_week, Client, NetResult};
 use crate::widgets::{menu_select_item, menu_text, top_level_menu_text};
 
+mod date_format;
+mod time_format;
+mod weekday;
+
+pub use date_format::DateFormat;
+pub use time_format::TimeFormat;
+pub use weekday::WeekDay;
+
 trait LocaleString {
-    fn to_format_string(&self) -> String;
+    fn to_format_string(&self) -> &'static str;
 }
 
-#[derive(
-    Clone, Copy, Debug, Eq, PartialEq, Default, Serialize, Deserialize,
-)]
-pub enum DateFormat {
-    #[default]
-    Dmy,
-    Mdy,
-}
-impl LocaleString for DateFormat {
-    fn to_format_string(&self) -> String {
-        match self {
-            DateFormat::Dmy => "%d-%m-%y".to_string(),
-            DateFormat::Mdy => "%m-%d-%y".to_string(),
-        }
-    }
-}
-impl std::fmt::Display for DateFormat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let repr = match self {
-            DateFormat::Dmy => "dd-mm-yyyy",
-            DateFormat::Mdy => "mm-dd-yyyy",
-        };
-        f.write_str(repr)
-    }
-}
-impl DateFormat {
-    const VALUES: [Self; 2] = [Self::Dmy, Self::Mdy];
-}
-
-#[derive(
-    Clone, Copy, Debug, Eq, PartialEq, Default, Serialize, Deserialize,
-)]
-pub enum TimeFormat {
-    H12,
-    #[default]
-    H24,
-}
-impl LocaleString for TimeFormat {
-    fn to_format_string(&self) -> String {
-        match self {
-            TimeFormat::H12 => "%I:%M:%S %p".to_string(),
-            TimeFormat::H24 => "%T".to_string(),
-        }
-    }
-}
-impl std::fmt::Display for TimeFormat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let repr = match self {
-            TimeFormat::H12 => "12-hour",
-            TimeFormat::H24 => "24-hour",
-        };
-        f.write_str(repr)
-    }
-}
-
-impl TimeFormat {
-    const VALUES: [Self; 2] = [Self::H12, Self::H24];
+trait TogglConvertible<T> {
+    fn to_toggl(&self) -> T;
+    fn from_toggl(value: &T) -> Self;
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Customization {
     date_format: DateFormat,
     time_format: TimeFormat,
+
+    #[cfg(not(test))]
+    week_start_day: WeekDay,
+    #[cfg(test)]
+    pub week_start_day: WeekDay,
+}
+
+impl From<Customization> for Preferences {
+    fn from(value: Customization) -> Self {
+        Preferences {
+            date_format: value.date_format.to_toggl(),
+            time_format: value.time_format.to_toggl(),
+            beginning_of_week: value.week_start_day.to_toggl(),
+        }
+    }
+}
+
+impl From<Preferences> for Customization {
+    fn from(value: Preferences) -> Self {
+        Self {
+            date_format: DateFormat::from_toggl(&value.date_format),
+            time_format: TimeFormat::from_toggl(&value.time_format),
+            week_start_day: WeekDay::from_toggl(&value.beginning_of_week),
+        }
+    }
 }
 
 impl Customization {
@@ -84,8 +65,7 @@ impl Customization {
     }
 
     pub fn format_date(&self, date: &NaiveDate) -> String {
-        date.format(&self.date_format.to_format_string())
-            .to_string()
+        date.format(self.date_format.to_format_string()).to_string()
     }
 
     pub fn format_datetime(
@@ -118,12 +98,26 @@ impl Customization {
             TimeFormat::H24 => true,
         }
     }
+
+    pub fn to_start_of_week(&self, dt: DateTime<Local>) -> DateTime<Local> {
+        to_start_of_week(dt, *self.week_start_day)
+    }
+
+    pub async fn save(
+        self,
+        default_workspace_id: Option<WorkspaceId>,
+        client: &Client,
+    ) -> NetResult<()> {
+        let prefs: Preferences = self.into();
+        prefs.save(default_workspace_id, client).await
+    }
 }
 
 #[derive(Clone, Debug)]
 pub enum CustomizationMessage {
     SelectTimeFormat(TimeFormat),
     SelectDateFormat(DateFormat),
+    SelectWeekBeginning(WeekDay),
     Discarded,
     Save,
 }
@@ -140,6 +134,10 @@ impl Customization {
             }
             CustomizationMessage::SelectDateFormat(fmt) => {
                 self.date_format = fmt;
+                Command::done(CustomizationMessage::Save)
+            }
+            CustomizationMessage::SelectWeekBeginning(day) => {
+                self.week_start_day = day;
                 Command::done(CustomizationMessage::Save)
             }
             CustomizationMessage::Discarded | CustomizationMessage::Save => {
@@ -171,6 +169,13 @@ impl Customization {
                         wrapper(CustomizationMessage::Discarded),
                     ),
                     self.date_format_menu(wrapper),
+                ),
+                menu::Item::with_menu(
+                    menu_text(
+                        "Week beginning",
+                        wrapper(CustomizationMessage::Discarded),
+                    ),
+                    self.week_beginning_menu(wrapper),
                 ),
             ])
             .max_width(120.0),
@@ -208,6 +213,25 @@ impl Customization {
                         f,
                         self.date_format == *f,
                         wrapper(CustomizationMessage::SelectDateFormat(*f)),
+                    )
+                })
+                .collect(),
+        )
+        .max_width(120f32)
+    }
+
+    fn week_beginning_menu<'a, T: 'a + Clone>(
+        &'a self,
+        wrapper: &'a impl Fn(CustomizationMessage) -> T,
+    ) -> menu::Menu<'a, T, iced::Theme, iced::Renderer> {
+        menu::Menu::new(
+            WeekDay::VALUES
+                .iter()
+                .map(|f| {
+                    menu_select_item(
+                        **f,
+                        self.week_start_day == *f,
+                        wrapper(CustomizationMessage::SelectWeekBeginning(*f)),
                     )
                 })
                 .collect(),
