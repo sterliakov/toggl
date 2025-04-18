@@ -185,7 +185,12 @@ jobs:
     needs: [npm_base_publish, crates_io_publish]
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - run: gh release edit "${GITHUB_REF#refs/tags/}" --draft=false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,8 +1,4 @@
-## 0.2.0-beta.1
-
-Release fix
-
-## 0.2.0-beta.0
+## 0.2.0
 
 * bugfix: fixed crash when no projects exist
 * feat: improved top menu bar behaviour
