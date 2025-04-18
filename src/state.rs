@@ -343,6 +343,8 @@ mod test {
             .await
             .expect("save customization");
 
+        // Respect API limits
+        async_std::task::sleep(std::time::Duration::from_secs(1)).await;
         let me = ExtendedMe::load(&client).await.expect("get me");
         let state = State::default().update_from_context(me);
         assert_eq!(state.customization.week_start_day, new_day);
