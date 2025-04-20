@@ -1,4 +1,5 @@
 use chrono::{DateTime, Duration, Local};
+use log::error;
 use serde::{Deserialize, Serialize};
 
 use crate::customization::Customization;
@@ -141,44 +142,63 @@ impl State {
 
         let mut contents = String::new();
 
-        let mut file = async_std::fs::File::open(Self::path())
-            .await
-            .map_err(|_| StatePersistenceError::FileSystem)?;
+        let mut file =
+            async_std::fs::File::open(Self::path()).await.map_err(|e| {
+                error!("Failed to open a state file: {e}");
+                StatePersistenceError::FileSystem
+            })?;
 
-        file.read_to_string(&mut contents)
-            .await
-            .map_err(|_| StatePersistenceError::FileSystem)?;
+        file.read_to_string(&mut contents).await.map_err(|e| {
+            error!("Failed to read a state file: {e}");
+            StatePersistenceError::FileSystem
+        })?;
 
-        serde_json::from_str(&contents)
-            .map_err(|_| StatePersistenceError::Format)
+        serde_json::from_str(&contents).map_err(|e| {
+            error!("Failed to parse the state file: {e}");
+            StatePersistenceError::Format
+        })
     }
 
     pub async fn save(self) -> Result<(), StatePersistenceError> {
         // This takes ownership for easier async saving
         use async_std::prelude::*;
 
-        let json = serde_json::to_string_pretty(&self)
-            .map_err(|_| StatePersistenceError::Format)?;
+        let json = serde_json::to_string_pretty(&self).map_err(|e| {
+            error!("Failed to serialize state: {e}");
+            StatePersistenceError::Format
+        })?;
 
         let path = Self::path();
 
         if let Some(dir) = path.parent() {
-            async_std::fs::create_dir_all(dir)
-                .await
-                .map_err(|_| StatePersistenceError::FileSystem)?;
+            async_std::fs::create_dir_all(dir).await.map_err(|e| {
+                error!("Failed to create parent directories: {e}");
+                StatePersistenceError::FileSystem
+            })?;
         }
 
         {
-            let mut file = async_std::fs::File::create(path)
-                .await
-                .map_err(|_| StatePersistenceError::FileSystem)?;
+            let mut file =
+                async_std::fs::File::create(path).await.map_err(|e| {
+                    error!("Failed to create a state file: {e}");
+                    StatePersistenceError::FileSystem
+                })?;
 
-            file.write_all(json.as_bytes())
-                .await
-                .map_err(|_| StatePersistenceError::FileSystem)?;
+            file.write_all(json.as_bytes()).await.map_err(|e| {
+                error!("Failed to write state to the file: {e}");
+                StatePersistenceError::FileSystem
+            })?;
         }
 
         Ok(())
+    }
+
+    pub async fn delete_file(self) -> Result<(), StatePersistenceError> {
+        let path = Self::path();
+        async_std::fs::remove_file(path).await.map_err(|e| {
+            error!("Failed to remove state file: {e}");
+            StatePersistenceError::FileSystem
+        })
     }
 
     pub async fn save_customization(&self) -> NetResult<()> {
