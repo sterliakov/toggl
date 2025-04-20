@@ -97,6 +97,7 @@ enum Message {
     LoadedMore(Vec<TimeEntry>),
     Tick,
     Reload,
+    Logout,
     Discarded,
     Error(String),
     WindowIdReceived(Option<window::Id>),
@@ -174,6 +175,12 @@ impl App {
                     steps.push(Command::done(Message::LoadMore));
                 }
                 return Command::batch(steps);
+            }
+            Message::Logout => {
+                info!("Logging out...");
+                self.screen = Screen::Unauthed(LoginScreen::new());
+                return Command::future(self.state.clone().delete_file())
+                    .map(|_| Message::Discarded);
             }
             Message::Error(e) => {
                 error!("Received generic error: {e}");
@@ -483,6 +490,7 @@ impl App {
                         menu_text("Projects", Message::Discarded),
                         project_menu,
                     ),
+                    menu::Item::new(menu_text("Log out", Message::Logout)),
                     menu::Item::new(
                         menu_text_disabled(format!(
                             "Version: {}",

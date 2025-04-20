@@ -1,3 +1,7 @@
+## 0.2.1
+
+* feat: added "Log out" button
+
 ## 0.2.0
 
 * bugfix: fixed crash when no projects exist
