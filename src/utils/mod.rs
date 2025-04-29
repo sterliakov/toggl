@@ -13,14 +13,14 @@ pub fn duration_to_hms(duration: &Duration) -> String {
     let seconds = total_seconds % 60;
     let minutes = (total_seconds / 60) % 60;
     let hours = (total_seconds / 60) / 60;
-    format!("{}:{:0>2}:{:0>2}", hours, minutes, seconds)
+    format!("{hours}:{minutes:0>2}:{seconds:0>2}")
 }
 
 pub fn duration_to_hm(duration: &Duration) -> String {
     let total_seconds = duration.num_seconds();
     let minutes = (total_seconds / 60) % 60;
     let hours = (total_seconds / 60) / 60;
-    format!("{}:{:0>2}", hours, minutes)
+    format!("{hours}:{minutes:0>2}")
 }
 
 pub fn to_start_of_week(
