@@ -81,7 +81,6 @@ enum Screen {
     #[default]
     Loading,
     Unauthed(LoginScreen),
-    Authed,
     Loaded(TemporaryState),
     EditEntry(EditTimeEntry),
 }
@@ -205,7 +204,7 @@ impl App {
             Screen::Loading => match message {
                 Message::Loaded(Ok(state)) => {
                     info!("Loaded state file.");
-                    self.screen = Screen::Authed;
+                    self.screen = Screen::Loaded(TemporaryState::default());
                     let api_token = state.api_token.clone();
                     self.state = *state;
                     return Command::future(Self::load_everything(api_token));
@@ -221,7 +220,7 @@ impl App {
                     api_token,
                 )) => {
                     info!("Authenticated successfully.");
-                    self.screen = Screen::Authed;
+                    self.screen = Screen::Loading;
                     self.state = State {
                         api_token: api_token.clone(),
                         ..State::default()
@@ -235,7 +234,6 @@ impl App {
                 }
                 _ => {}
             },
-            Screen::Authed => {}
             Screen::Loaded(temp_state) => match message {
                 Message::TimeEntryProxy(TimeEntryMessage::Edit(e)) => {
                     self.begin_edit(e.clone());
@@ -387,8 +385,7 @@ impl App {
 
     pub fn view(&self) -> Element<Message> {
         match &self.screen {
-            Screen::Loading => loading_message(),
-            Screen::Authed => loading_message(),
+            Screen::Loading => loading_message(&self.error),
             Screen::Unauthed(screen) => screen.view().map(Message::LoginProxy),
             Screen::Loaded(temp_state) => {
                 let content = column(
@@ -412,17 +409,22 @@ impl App {
                 let error_repr = if self.error.is_empty() {
                     None
                 } else {
-                    Some(text(&self.error).style(text::danger))
+                    Some(
+                        row![text(&self.error).style(text::danger)]
+                            .padding([4, 8]),
+                    )
                 };
 
                 container(
-                    column![
-                        self.menu(),
-                        temp_state
-                            .running_entry_widget
-                            .view(&self.state)
-                            .map(Message::RunningEntryProxy),
-                        container(scrollable(content)).style(|_| {
+                    column![self.menu()]
+                        .push(
+                            temp_state
+                                .running_entry_widget
+                                .view(&self.state)
+                                .map(Message::RunningEntryProxy),
+                        )
+                        .push_maybe(error_repr)
+                        .push(container(scrollable(content)).style(|_| {
                             container::Style {
                                 border: iced::Border {
                                     color: iced::color!(0x0000cd),
@@ -431,9 +433,7 @@ impl App {
                                 },
                                 ..container::Style::default()
                             }
-                        })
-                    ]
-                    .push_maybe(error_repr),
+                        })),
                 )
                 .center_x(Fill)
                 .into()
@@ -650,6 +650,23 @@ impl App {
     }
 }
 
-fn loading_message<'a>() -> Element<'a, Message> {
-    center(text("Loading...").width(Fill).align_x(Center).size(50)).into()
+fn loading_message<'a>(error: &'a str) -> Element<'a, Message> {
+    if error.is_empty() {
+        center(text("Loading...").width(Fill).align_x(Center).size(48)).into()
+    } else {
+        center(
+            column![
+                text(format!("Error: {error}"))
+                    .width(Fill)
+                    .align_x(Center)
+                    .size(24),
+                button("Log Out")
+                    .on_press(Message::Logout)
+                    .style(button::secondary),
+            ]
+            .align_x(iced::Center)
+            .spacing(16.0),
+        )
+        .into()
+    }
 }

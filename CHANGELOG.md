@@ -1,3 +1,7 @@
+## 0.2.2
+
+* bugfix: increased visibility of any errors.
+
 ## 0.2.1
 
 * feat: added "Log out" button
