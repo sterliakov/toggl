@@ -11,6 +11,7 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{debug, error, info};
 use utils::duration_to_hm;
+use widgets::{default_button_text, menu_button};
 
 mod cli;
 mod customization;
@@ -46,6 +47,7 @@ pub fn main() -> iced::Result {
     }
     iced::application(App::title, App::update, App::view)
         .subscription(App::subscription)
+        .theme(App::theme)
         .window_size((400.0, 600.0))
         .settings(iced::Settings {
             default_text_size: 14.into(),
@@ -121,7 +123,7 @@ lazy_static! {
 }
 
 impl App {
-    fn new() -> (Self, Command<Message>) {
+    pub fn new() -> (Self, Command<Message>) {
         (
             Self::default(),
             Command::batch(vec![
@@ -131,7 +133,7 @@ impl App {
         )
     }
 
-    fn title(&self) -> String {
+    pub fn title(&self) -> String {
         if self.state.running_entry.is_some() {
             "* Toggl Tracker".to_string()
         } else {
@@ -139,7 +141,7 @@ impl App {
         }
     }
 
-    fn icon(&self) -> window::Icon {
+    pub fn icon(&self) -> window::Icon {
         if self.state.running_entry.is_some() {
             RUNNING_ICON.clone()
         } else {
@@ -155,7 +157,7 @@ impl App {
         }
     }
 
-    fn update(&mut self, message: Message) -> Command<Message> {
+    pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::WindowIdReceived(id) => {
                 debug!("Setting window id to {id:?}");
@@ -383,7 +385,7 @@ impl App {
         self.screen = Screen::EditEntry(EditTimeEntry::new(entry, &self.state));
     }
 
-    fn view(&self) -> Element<Message> {
+    pub fn view(&self) -> Element<Message> {
         match &self.screen {
             Screen::Loading => loading_message(),
             Screen::Authed => loading_message(),
@@ -520,23 +522,30 @@ impl App {
             self.week_total(),
         ])
         .width(iced::Length::Fill)
+        .style(|theme: &iced::Theme, status: iced_aw::style::Status| {
+            menu::Style {
+                path_border: iced::Border {
+                    radius: 6.0.into(),
+                    ..Default::default()
+                },
+                ..iced_aw::menu::primary(theme, status)
+            }
+        })
         .into()
     }
 
     fn week_total(&self) -> menu::Item<Message, iced::Theme, iced::Renderer> {
         menu::Item::new(
-            button(
-                text(format!(
+            menu_button(
+                default_button_text(format!(
                     "Week total: {}",
                     duration_to_hm(&self.state.week_total())
                 ))
-                .size(11)
                 .align_x(Horizontal::Right)
                 .width(iced::Length::Fill),
+                None,
             )
-            .padding([2, 4])
-            .width(iced::Length::Fill)
-            .style(|_, _| button::Style::default()),
+            .style(|theme, _| button::text(theme, button::Status::Active)),
         )
     }
 
@@ -610,7 +619,7 @@ impl App {
         }
     }
 
-    fn subscription(&self) -> iced::Subscription<Message> {
+    pub fn subscription(&self) -> iced::Subscription<Message> {
         use iced::keyboard::{on_key_press, Key};
         iced::Subscription::batch(vec![
             iced::time::every(std::time::Duration::from_secs(1))
@@ -630,6 +639,14 @@ impl App {
                 }
             }),
         ])
+    }
+
+    pub fn theme(&self) -> iced::Theme {
+        if self.state.customization.dark_mode {
+            iced::Theme::Dracula
+        } else {
+            iced::Theme::Light
+        }
     }
 }
 

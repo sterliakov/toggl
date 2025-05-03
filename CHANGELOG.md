@@ -1,6 +1,7 @@
 ## 0.2.1
 
 * feat: added "Log out" button
+* feat: dark mode support
 
 ## 0.2.0
 

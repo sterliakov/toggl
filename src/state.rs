@@ -67,10 +67,9 @@ impl State {
             default_workspace: ws_id,
             default_project: project_id,
             earliest_entry_time,
-            customization: me
-                .preferences
-                .with_beginning_of_week(me.beginning_of_week)
-                .into(),
+            customization: self.customization.update_from_preferences(
+                me.preferences.with_beginning_of_week(me.beginning_of_week),
+            ),
             ..self
         }
     }
