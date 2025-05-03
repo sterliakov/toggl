@@ -385,7 +385,7 @@ impl App {
 
     pub fn view(&self) -> Element<Message> {
         match &self.screen {
-            Screen::Loading => loading_message(),
+            Screen::Loading => loading_message(&self.error),
             Screen::Unauthed(screen) => screen.view().map(Message::LoginProxy),
             Screen::Loaded(temp_state) => {
                 let content = column(
@@ -650,6 +650,23 @@ impl App {
     }
 }
 
-fn loading_message<'a>() -> Element<'a, Message> {
-    center(text("Loading...").width(Fill).align_x(Center).size(50)).into()
+fn loading_message<'a>(error: &'a str) -> Element<'a, Message> {
+    if error.is_empty() {
+        center(text("Loading...").width(Fill).align_x(Center).size(48)).into()
+    } else {
+        center(
+            column![
+                text(format!("Error: {error}"))
+                    .width(Fill)
+                    .align_x(Center)
+                    .size(24),
+                button("Log Out")
+                    .on_press(Message::Logout)
+                    .style(button::secondary),
+            ]
+            .align_x(iced::Center)
+            .spacing(16.0),
+        )
+        .into()
+    }
 }
