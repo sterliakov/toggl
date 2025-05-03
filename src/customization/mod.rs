@@ -5,7 +5,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::entities::{Preferences, WorkspaceId};
 use crate::utils::{to_start_of_week, Client, NetResult};
-use crate::widgets::{menu_select_item, menu_text, top_level_menu_text};
+use crate::widgets::{
+    default_button_text, menu_button, menu_select_item, menu_text,
+    top_level_menu_text,
+};
 
 mod date_format;
 mod time_format;
@@ -33,6 +36,9 @@ pub struct Customization {
     week_start_day: WeekDay,
     #[cfg(test)]
     pub week_start_day: WeekDay,
+
+    #[serde(default)]
+    pub dark_mode: bool,
 }
 
 impl From<Customization> for Preferences {
@@ -41,16 +47,6 @@ impl From<Customization> for Preferences {
             date_format: value.date_format.to_toggl(),
             time_format: value.time_format.to_toggl(),
             beginning_of_week: value.week_start_day.to_toggl(),
-        }
-    }
-}
-
-impl From<Preferences> for Customization {
-    fn from(value: Preferences) -> Self {
-        Self {
-            date_format: DateFormat::from_toggl(&value.date_format),
-            time_format: TimeFormat::from_toggl(&value.time_format),
-            week_start_day: WeekDay::from_toggl(&value.beginning_of_week),
         }
     }
 }
@@ -118,6 +114,7 @@ pub enum CustomizationMessage {
     SelectTimeFormat(TimeFormat),
     SelectDateFormat(DateFormat),
     SelectWeekBeginning(WeekDay),
+    ToggleDarkMode,
     Discarded,
     Save,
 }
@@ -140,6 +137,10 @@ impl Customization {
                 self.week_start_day = day;
                 Command::done(CustomizationMessage::Save)
             }
+            CustomizationMessage::ToggleDarkMode => {
+                self.dark_mode = !self.dark_mode;
+                Command::done(CustomizationMessage::Save)
+            }
             CustomizationMessage::Discarded | CustomizationMessage::Save => {
                 Command::none()
             }
@@ -150,6 +151,9 @@ impl Customization {
         &'a self,
         wrapper: &'a impl Fn(CustomizationMessage) -> T,
     ) -> menu::Item<'a, T, iced::Theme, iced::Renderer> {
+        use iced::alignment::Vertical;
+        use iced::widget::{row, toggler};
+
         menu::Item::with_menu(
             top_level_menu_text(
                 "Customization",
@@ -177,6 +181,17 @@ impl Customization {
                     ),
                     self.week_beginning_menu(wrapper),
                 ),
+                menu::Item::new(menu_button(
+                    row![
+                        default_button_text("Dark mode")
+                            .width(iced::Length::Fill),
+                        toggler(self.dark_mode).on_toggle(|_| wrapper(
+                            CustomizationMessage::ToggleDarkMode
+                        )),
+                    ]
+                    .align_y(Vertical::Center),
+                    Some(wrapper(CustomizationMessage::ToggleDarkMode)),
+                )),
             ])
             .max_width(120.0),
         )
@@ -237,5 +252,14 @@ impl Customization {
                 .collect(),
         )
         .max_width(120f32)
+    }
+
+    pub fn update_from_preferences(self, preferences: Preferences) -> Self {
+        Self {
+            date_format: DateFormat::from_toggl(&preferences.date_format),
+            time_format: TimeFormat::from_toggl(&preferences.time_format),
+            week_start_day: WeekDay::from_toggl(&preferences.beginning_of_week),
+            ..self
+        }
     }
 }
