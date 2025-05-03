@@ -412,17 +412,22 @@ impl App {
                 let error_repr = if self.error.is_empty() {
                     None
                 } else {
-                    Some(text(&self.error).style(text::danger))
+                    Some(
+                        row![text(&self.error).style(text::danger)]
+                            .padding([4, 8]),
+                    )
                 };
 
                 container(
-                    column![
-                        self.menu(),
-                        temp_state
-                            .running_entry_widget
-                            .view(&self.state)
-                            .map(Message::RunningEntryProxy),
-                        container(scrollable(content)).style(|_| {
+                    column![self.menu()]
+                        .push(
+                            temp_state
+                                .running_entry_widget
+                                .view(&self.state)
+                                .map(Message::RunningEntryProxy),
+                        )
+                        .push_maybe(error_repr)
+                        .push(container(scrollable(content)).style(|_| {
                             container::Style {
                                 border: iced::Border {
                                     color: iced::color!(0x0000cd),
@@ -431,9 +436,7 @@ impl App {
                                 },
                                 ..container::Style::default()
                             }
-                        })
-                    ]
-                    .push_maybe(error_repr),
+                        })),
                 )
                 .center_x(Fill)
                 .into()
