@@ -185,7 +185,9 @@ impl Customization {
                     row![
                         default_button_text("Dark mode")
                             .width(iced::Length::Fill),
-                        toggler(self.dark_mode),
+                        toggler(self.dark_mode).on_toggle(|_| wrapper(
+                            CustomizationMessage::ToggleDarkMode
+                        )),
                     ]
                     .align_y(Vertical::Center),
                     Some(wrapper(CustomizationMessage::ToggleDarkMode)),

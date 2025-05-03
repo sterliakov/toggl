@@ -526,7 +526,7 @@ impl App {
             menu::Style {
                 path_border: iced::Border {
                     radius: 6.0.into(),
-                    ..Default::default()
+                    ..iced::Border::default()
                 },
                 ..iced_aw::menu::primary(theme, status)
             }
