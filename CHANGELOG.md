@@ -1,6 +1,7 @@
 ## 0.2.2
 
 * bugfix: increased visibility of any errors.
+* feat: added editor history (<kbd>Ctrl+Z</kbd> to undo).
 
 ## 0.2.1
 
