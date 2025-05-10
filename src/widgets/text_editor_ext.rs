@@ -167,7 +167,7 @@ fn is_important(action: &Action) -> bool {
     is_select(action) || action.is_edit()
 }
 
-fn move_cursor_to(content: &mut Content, (line, col): (usize, usize)) {
+fn move_cursor_to(content: &mut Content, (line, col): CursorPosition) {
     content.perform(Action::Move(Motion::DocumentStart));
     for _ in 0..line {
         content.perform(Action::Move(Motion::Down));
