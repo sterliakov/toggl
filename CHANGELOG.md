@@ -2,6 +2,8 @@
 
 * bugfix: increased visibility of any errors.
 * feat: added editor history (<kbd>Ctrl+Z</kbd> to undo).
+* feat: replaced old icon with a new one (shoutout to my wife Sofia who created
+  it!)
 
 ## 0.2.1
 

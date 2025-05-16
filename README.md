@@ -4,11 +4,10 @@
 [![Build](https://github.com/sterliakov/toggl/actions/workflows/ci.yaml/badge.svg?event=push)](https://github.com/sterliakov/toggl/actions/workflows/ci.yaml?query=event%3Apush)
 [![Renovate enabled](https://img.shields.io/badge/renovate-enabled-brightgreen.svg)](https://renovatebot.com/)
 [![GitHub Release](https://img.shields.io/github/v/release/sterliakov/toggl)](https://github.com/sterliakov/toggl/releases/latest)
-
-<!--
 [![Crates.io Version](https://img.shields.io/crates/v/toggl-tracker)](https://crates.io/crates/toggl-tracker)
 [![NPM Version](https://img.shields.io/npm/v/%40sterliakov%2Ftoggl-tracker)](https://www.npmjs.com/package/@sterliakov/toggl-tracker)
--->
+
+<img src="./assets/icon.png" alt="logo" width="300" height="300" />
 
 ## Disclaimer
 
