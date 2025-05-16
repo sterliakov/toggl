@@ -34,7 +34,7 @@ license = "MIT"
 name = "toggl-tracker"
 readme = "README.md"
 repository = "https://github.com/sterliakov/toggl"
-version = "0.2.2"
+version = "0.2.3"
 
 [profile.release]
 lto = true
