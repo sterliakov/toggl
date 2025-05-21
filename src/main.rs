@@ -10,6 +10,7 @@ use iced_aw::menu;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{debug, error, info};
+use screens::{LegalInfo, LegalInfoMessage};
 use utils::duration_to_hm;
 use widgets::{default_button_text, menu_button};
 
@@ -83,6 +84,7 @@ enum Screen {
     Unauthed(LoginScreen),
     Loaded(TemporaryState),
     EditEntry(EditTimeEntry),
+    Legal(LegalInfo),
 }
 
 #[derive(Debug, Clone)]
@@ -94,6 +96,7 @@ enum Message {
     EditTimeEntryProxy(EditTimeEntryMessage),
     RunningEntryProxy(RunningEntryMessage),
     CustomizationProxy(CustomizationMessage),
+    LegalProxy(LegalInfoMessage),
     LoadMore,
     LoadedMore(Vec<TimeEntry>),
     Tick,
@@ -106,6 +109,7 @@ enum Message {
     SelectProject(Option<ProjectId>),
     KeyPressed(NamedKey, keyboard::Modifiers),
     SetUpdateStep(UpdateStep),
+    OpenLegalScreen,
 }
 
 lazy_static! {
@@ -196,6 +200,9 @@ impl App {
                 } else {
                     Command::none()
                 }
+            }
+            Message::OpenLegalScreen => {
+                self.screen = Screen::Legal(LegalInfo::new());
             }
             _ => {}
         };
@@ -345,15 +352,27 @@ impl App {
                 Message::EditTimeEntryProxy(EditTimeEntryMessage::Abort) => {
                     self.screen = Screen::Loaded(TemporaryState::default())
                 }
+                Message::EditTimeEntryProxy(msg) => {
+                    return screen
+                        .update(msg, &self.state.customization)
+                        .map(Message::EditTimeEntryProxy)
+                }
                 Message::KeyPressed(key, m) => {
                     return screen
                         .handle_key(key, m)
                         .map(Message::EditTimeEntryProxy)
                 }
-                Message::EditTimeEntryProxy(msg) => {
-                    return screen
-                        .update(msg, &self.state.customization)
-                        .map(Message::EditTimeEntryProxy)
+                _ => {}
+            },
+            Screen::Legal(screen) => match message {
+                Message::LegalProxy(LegalInfoMessage::Close) => {
+                    return self.load_entries();
+                }
+                Message::LegalProxy(msg) => {
+                    return screen.update(msg).map(Message::LegalProxy)
+                }
+                Message::KeyPressed(key, m) => {
+                    return screen.handle_key(key, m).map(Message::LegalProxy)
                 }
                 _ => {}
             },
@@ -441,6 +460,7 @@ impl App {
             Screen::EditEntry(screen) => screen
                 .view(&self.state.customization)
                 .map(Message::EditTimeEntryProxy),
+            Screen::Legal(screen) => screen.view().map(Message::LegalProxy),
         }
     }
 
@@ -492,6 +512,10 @@ impl App {
                         menu_text("Projects", Message::Discarded),
                         project_menu,
                     ),
+                    menu::Item::new(menu_text(
+                        "Legal info",
+                        Message::OpenLegalScreen,
+                    )),
                     menu::Item::new(menu_text("Log out", Message::Logout)),
                     menu::Item::new(
                         menu_text_disabled(format!(
