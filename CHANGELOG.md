@@ -1,9 +1,13 @@
+## 0.2.3
+
+* feat: replaced old icon with a new one (shoutout to my wife Sofia who created
+  it!)
+* feat: added links to Toggl ToS and Privacy Policy
+
 ## 0.2.2
 
 * bugfix: increased visibility of any errors.
 * feat: added editor history (<kbd>Ctrl+Z</kbd> to undo).
-* feat: replaced old icon with a new one (shoutout to my wife Sofia who created
-  it!)
 
 ## 0.2.1
 

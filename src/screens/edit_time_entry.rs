@@ -1,10 +1,8 @@
-use iced::alignment::Horizontal;
 use iced::keyboard::key::Named as NamedKey;
 use iced::widget::{
     button, column, container, pick_list, row, scrollable, text,
 };
 use iced::{keyboard, Element, Fill, Length, Task as Command};
-use iced_fonts::bootstrap::Bootstrap;
 
 use crate::customization::Customization;
 use crate::entities::MaybeProject;
@@ -12,7 +10,7 @@ use crate::state::State;
 use crate::time_entry::TimeEntry;
 use crate::utils::{Client, ExactModifiers};
 use crate::widgets::{
-    icon_text, DateTimeEditMessage, DateTimeWidget, TextEditorExt,
+    close_button, DateTimeEditMessage, DateTimeWidget, TextEditorExt,
     TextEditorMessage,
 };
 
@@ -79,17 +77,7 @@ impl EditTimeEntry {
         use std::borrow::Borrow;
 
         let content = column![
-            container(
-                button(
-                    icon_text(Bootstrap::X)
-                        .size(24)
-                        .width(iced::Length::Shrink)
-                )
-                .on_press(EditTimeEntryMessage::Abort)
-                .style(button::text)
-            )
-            .align_x(Horizontal::Right)
-            .width(iced::Length::Fill),
+            close_button(EditTimeEntryMessage::Abort),
             Element::from(self.description_editor.view())
                 .map(EditTimeEntryMessage::DescriptionEdited),
             row![
