@@ -1,3 +1,7 @@
+## 0.2.4
+
+* feat: added tag editor
+
 ## 0.2.3
 
 * feat: replaced old icon with a new one (shoutout to my wife Sofia who created
