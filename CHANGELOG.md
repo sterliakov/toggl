@@ -1,6 +1,7 @@
 ## 0.2.4 (unreleased)
 
 * bugfix: description editor no longer handles keyboard shortcuts when not focused.
+* feat: added tag editor
 
 ## 0.2.3
 
