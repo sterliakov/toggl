@@ -3,7 +3,9 @@ use log::error;
 use serde::{Deserialize, Serialize};
 
 use crate::customization::Customization;
-use crate::entities::{ExtendedMe, Project, ProjectId, Workspace, WorkspaceId};
+use crate::entities::{
+    ExtendedMe, Project, ProjectId, Tag, Workspace, WorkspaceId,
+};
 use crate::time_entry::TimeEntry;
 use crate::utils::{Client, NetResult};
 
@@ -17,6 +19,8 @@ pub struct State {
     pub earliest_entry_time: Option<DateTime<Local>>,
     pub projects: Vec<Project>,
     pub workspaces: Vec<Workspace>,
+    #[serde(default)]
+    pub tags: Vec<Tag>,
     pub default_workspace: Option<WorkspaceId>,
     pub default_project: Option<ProjectId>,
     pub customization: Customization,
@@ -77,6 +81,7 @@ impl State {
             has_more_entries: earliest_entry_time.is_some(),
             projects: me.projects,
             workspaces: me.workspaces,
+            tags: me.tags,
             default_workspace: ws_id,
             default_project: project_id,
             earliest_entry_time,
@@ -340,6 +345,7 @@ mod test {
         let me = ExtendedMe {
             projects: vec![],
             workspaces: vec![ws.clone()],
+            tags: vec![],
             time_entries: vec![e_running.clone(), e_stopped, e_foreign.clone()],
             beginning_of_week: 0,
             default_workspace_id: Some(WorkspaceId::new(1)),
@@ -380,6 +386,7 @@ mod test {
         let me = ExtendedMe {
             projects: vec![],
             workspaces: vec![ws.clone()],
+            tags: vec![],
             time_entries: vec![e.clone()],
             beginning_of_week: 0,
             default_workspace_id: Some(WorkspaceId::new(1)),
@@ -399,6 +406,7 @@ mod test {
         let me = ExtendedMe {
             projects: vec![],
             workspaces: vec![],
+            tags: vec![],
             time_entries: vec![],
             beginning_of_week: 2, // Tue
             default_workspace_id: Some(WorkspaceId::new(1)),
@@ -424,6 +432,7 @@ mod test {
         let mut me = ExtendedMe {
             projects: vec![],
             workspaces: vec![ws1.clone(), ws2.clone()],
+            tags: vec![],
             time_entries: vec![],
             beginning_of_week: 2, // Tue
             default_workspace_id: Some(ws2.id),
