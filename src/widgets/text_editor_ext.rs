@@ -45,6 +45,9 @@ impl TextEditorExt {
     pub fn view<'a>(&'a self) -> TextEditor<'a, PlainText, TextEditorMessage> {
         text_editor(&self.content)
             .key_binding(|press| {
+                if !matches!(press.status, text_editor::Status::Focused) {
+                    return None;
+                }
                 match press.key.as_ref() {
                     keyboard::Key::Named(NamedKey::Backspace)
                     | keyboard::Key::Character("w")
