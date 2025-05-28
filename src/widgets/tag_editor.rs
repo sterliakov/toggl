@@ -93,8 +93,10 @@ impl TagEditor {
             .width(Length::Fill);
 
         let overlay = container(scrollable(choices))
-            // FIXME: dropdown has some issues with overlay positioning,
+            // FIXME: dropdown has issues with overlay positioning,
             // without these severe restrictions it will overflow everywhere.
+            // This can be removed once https://github.com/iced-rs/iced_aw/pull/335
+            // is released
             .max_width(120)
             .max_height(320);
 
