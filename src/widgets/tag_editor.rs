@@ -51,8 +51,10 @@ impl TagEditor {
             Toggle => self.expanded = !self.expanded,
             EditNew(text) => self.new_tag = text,
             SubmitNew => {
-                if !self.selected.contains(&self.new_tag) {
+                if !self.options.contains(&self.new_tag) {
                     self.options.push(self.new_tag.clone());
+                }
+                if !self.selected.contains(&self.new_tag) {
                     self.selected.push(self.new_tag.clone());
                 }
                 self.new_tag = "".to_string();
