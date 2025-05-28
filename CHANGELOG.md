@@ -1,9 +1,12 @@
+## 0.2.4 (unreleased)
+
+* bugfix: description editor no longer handles keyboard shortcuts when not focused.
+
 ## 0.2.3
 
 * feat: replaced old icon with a new one (shoutout to my wife Sofia who created
   it!)
 * feat: added links to Toggl ToS and Privacy Policy
-* bugfix: description editor no longer handles keyboard shortcuts when not focused.
 
 ## 0.2.2
 
