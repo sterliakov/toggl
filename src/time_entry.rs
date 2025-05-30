@@ -26,22 +26,16 @@ fn maybe_datetime_serialize_utc<S: Serializer>(
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Default))]
 pub struct TimeEntry {
-    pub at: String,
     pub billable: bool,
     pub description: Option<String>,
     pub duration: i64,
     pub id: u64,
-    pub permissions: Option<Vec<String>>,
     pub project_id: Option<ProjectId>,
     #[serde(serialize_with = "datetime_serialize_utc")]
     pub start: DateTime<Local>,
     #[serde(serialize_with = "maybe_datetime_serialize_utc")]
     pub stop: Option<DateTime<Local>>,
-    #[serde(serialize_with = "maybe_datetime_serialize_utc")]
-    pub server_deleted_at: Option<DateTime<Local>>,
-    pub tag_ids: Vec<u64>,
     pub tags: Vec<String>,
-    pub task_id: Option<u64>,
     pub user_id: u64,
     pub workspace_id: WorkspaceId,
 }
@@ -86,6 +80,13 @@ impl TimeEntry {
     }
 
     pub async fn save(&self, client: &Client) -> NetResult<()> {
+        #[derive(Serialize)]
+        struct UpdateRequest<'a> {
+            #[serde(flatten)]
+            entry: &'a TimeEntry,
+            tag_action: &'a str,
+        }
+
         debug!("Updating a time entry {}...", self.id);
         let mut res = client
             .put(format!(
@@ -94,7 +95,10 @@ impl TimeEntry {
                 self.workspace_id,
                 self.id
             ))
-            .body_json(&self)?
+            .body_json(&UpdateRequest {
+                entry: self,
+                tag_action: "delete",
+            })?
             .send()
             .await?;
         Client::check_status(&mut res).await
@@ -242,6 +246,10 @@ impl TimeEntry {
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashSet;
+    use std::fmt::Debug;
+    use std::hash::Hash;
+
     use super::TimeEntry;
     use crate::test::test_client;
     use crate::ExtendedMe;
@@ -263,33 +271,76 @@ mod test {
         let (running, _) = TimeEntry::split_running(entries);
         assert!(running.is_some());
 
-        running.unwrap().stop(&client).await.expect("stop");
-        let entries =
-            TimeEntry::load(None, &client).await.expect("get entries");
-        assert_eq!(entries.len(), initial_count + 1);
-        assert_eq!(entries[0].description, Some("Test".to_string()));
-        let (running, entries) = TimeEntry::split_running(entries);
-        assert!(running.is_none());
+        let mut last = {
+            running.unwrap().stop(&client).await.expect("stop");
+            let entries =
+                TimeEntry::load(None, &client).await.expect("get entries");
+            assert_eq!(entries.len(), initial_count + 1);
+            assert_eq!(entries[0].description, Some("Test".to_string()));
+            let (running, entries) = TimeEntry::split_running(entries);
+            assert!(running.is_none());
+            entries[0].clone()
+        };
 
         // Respect API limits
         async_std::task::sleep(std::time::Duration::from_secs(1)).await;
-
-        let mut last = entries[0].clone();
-        last.description = Some("Other".to_string());
-        last.save(&client).await.expect("update");
-        let entries =
-            TimeEntry::load(None, &client).await.expect("get entries");
-        assert_eq!(entries.len(), initial_count + 1);
-        assert_eq!(entries[0].description, Some("Other".to_string()));
-
-        entries[0].clone().delete(&client).await.expect("delete");
-        let entries =
-            TimeEntry::load(None, &client).await.expect("get entries");
-        assert_eq!(entries.len(), initial_count);
+        let mut last = {
+            last.description = Some("Other".to_string());
+            last.save(&client).await.expect("update");
+            let entries =
+                TimeEntry::load(None, &client).await.expect("get entries");
+            assert_eq!(entries.len(), initial_count + 1);
+            assert_eq!(entries[0].description, Some("Other".to_string()));
+            entries[0].clone()
+        };
 
         async_std::task::sleep(std::time::Duration::from_secs(1)).await;
-        TimeEntry::load(entries.last().map(|e| e.start), &client)
+        let mut last = {
+            last.tags = vec!["foo".to_string(), "bar".to_string()];
+            last.save(&client).await.expect("update");
+            let entries =
+                TimeEntry::load(None, &client).await.expect("get entries");
+            assert_ignore_order(
+                entries[0].tags.clone(),
+                vec!["foo".to_string(), "bar".to_string()],
+            );
+            entries[0].clone()
+        };
+
+        async_std::task::sleep(std::time::Duration::from_secs(1)).await;
+        let last = {
+            last.tags = vec!["foo".to_string(), "baz".to_string()];
+            last.save(&client).await.expect("update");
+            let entries =
+                TimeEntry::load(None, &client).await.expect("get entries");
+            assert_ignore_order(
+                entries[0].tags.clone(),
+                vec!["foo".to_string(), "baz".to_string()],
+            );
+            entries[0].clone()
+        };
+
+        let last = {
+            // delete
+            last.delete(&client).await.expect("delete");
+            let entries =
+                TimeEntry::load(None, &client).await.expect("get entries");
+            assert_eq!(entries.len(), initial_count);
+            entries.last().cloned()
+        };
+
+        async_std::task::sleep(std::time::Duration::from_secs(1)).await;
+        TimeEntry::load(last.map(|e| e.start), &client)
             .await
             .expect("get older");
+    }
+
+    fn assert_ignore_order<T: Eq + Hash + Debug>(
+        got: impl IntoIterator<Item = T>,
+        expected: impl IntoIterator<Item = T>,
+    ) {
+        let got: HashSet<_> = got.into_iter().collect();
+        let expected: HashSet<_> = expected.into_iter().collect();
+        assert_eq!(got, expected);
     }
 }
