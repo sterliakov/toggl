@@ -134,11 +134,17 @@ impl State {
         }
     }
 
+    fn sort_entries(&mut self) {
+        self.time_entries
+            .sort_by_key(|e| std::cmp::Reverse(e.start));
+    }
+
     pub fn apply_change(&mut self, change: EntryEditInfo) -> Result<(), ()> {
         //! Apply an optimistic update.
         //!
         //! If Ok(), the changes are unambiguous. Otherwise a full resync
         //! should be performed.
+
         match change.action {
             EntryEditAction::Create => {
                 if self.running_entry.is_some() && change.entry.stop.is_none() {
@@ -150,8 +156,7 @@ impl State {
                     self.running_entry = Some(change.entry.clone());
                 } else {
                     self.time_entries.insert(0, change.entry.clone());
-                    self.time_entries
-                        .sort_by_key(|e| std::cmp::Reverse(e.start));
+                    self.sort_entries();
                 }
                 Ok(())
             }
@@ -191,8 +196,7 @@ impl State {
                         // Entry stopped
                         self.running_entry = None;
                         self.time_entries.insert(0, change.entry.clone());
-                        self.time_entries
-                            .sort_by_key(|e| std::cmp::Reverse(e.start));
+                        self.sort_entries();
                         return Ok(());
                     }
                     _ => {}
@@ -201,6 +205,7 @@ impl State {
                 for e in self.time_entries.iter_mut() {
                     if e.id == change.entry.id {
                         change.entry.clone_into(e);
+                        self.sort_entries();
                         return Ok(());
                     }
                 }

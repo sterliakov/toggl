@@ -36,7 +36,6 @@ pub struct TimeEntry {
     pub stop: Option<DateTime<Local>>,
     #[serde(deserialize_with = "maybe_vec_deserialize")]
     pub tags: Vec<String>,
-    pub task_id: Option<u64>,
     pub user_id: u64,
     pub workspace_id: WorkspaceId,
 }
