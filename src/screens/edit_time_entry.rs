@@ -6,7 +6,7 @@ use iced::{keyboard, Element, Fill, Length, Task as Command};
 
 use crate::customization::Customization;
 use crate::entities::MaybeProject;
-use crate::state::State;
+use crate::state::{EntryEditAction, EntryEditInfo, State};
 use crate::time_entry::TimeEntry;
 use crate::utils::{Client, ExactModifiers};
 use crate::widgets::{
@@ -35,7 +35,7 @@ pub enum EditTimeEntryMessage {
     Submit,
     Delete,
     Abort,
-    Completed,
+    Completed(EntryEditInfo),
     Error(String),
 }
 
@@ -189,7 +189,7 @@ impl EditTimeEntry {
                 ));
             }
             EditTimeEntryMessage::Abort => {}
-            EditTimeEntryMessage::Completed => {}
+            EditTimeEntryMessage::Completed(_) => {}
             EditTimeEntryMessage::Error(err) => {
                 self.error = Some(err);
             }
@@ -227,7 +227,10 @@ impl EditTimeEntry {
         {
             EditTimeEntryMessage::Error(message)
         } else {
-            EditTimeEntryMessage::Completed
+            EditTimeEntryMessage::Completed(EntryEditInfo {
+                entry,
+                action: EntryEditAction::Update,
+            })
         }
     }
 
@@ -241,7 +244,10 @@ impl EditTimeEntry {
         {
             EditTimeEntryMessage::Error(message)
         } else {
-            EditTimeEntryMessage::Completed
+            EditTimeEntryMessage::Completed(EntryEditInfo {
+                entry,
+                action: EntryEditAction::Delete,
+            })
         }
     }
 }

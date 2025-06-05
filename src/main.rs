@@ -344,13 +344,13 @@ impl App {
             },
             Screen::EditEntry(screen) => match message {
                 Message::EditTimeEntryProxy(
-                    EditTimeEntryMessage::Completed,
+                    EditTimeEntryMessage::Completed(change),
                 ) => {
-                    self.screen = Screen::Loading;
-                    return Command::perform(State::load(), Message::Loaded);
+                    self.state.apply_change(change);
+                    self.screen = Screen::Loaded(TemporaryState::default());
                 }
                 Message::EditTimeEntryProxy(EditTimeEntryMessage::Abort) => {
-                    self.screen = Screen::Loaded(TemporaryState::default())
+                    self.screen = Screen::Loaded(TemporaryState::default());
                 }
                 Message::EditTimeEntryProxy(msg) => {
                     return screen

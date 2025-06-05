@@ -115,7 +115,7 @@ impl TimeEntry {
         Client::check_status(&mut res).await
     }
 
-    pub async fn delete(self, client: &Client) -> NetResult<()> {
+    pub async fn delete(&self, client: &Client) -> NetResult<()> {
         debug!("Deleting a time entry {}...", self.id);
         let mut res = client
             .delete(format!(

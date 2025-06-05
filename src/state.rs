@@ -38,6 +38,18 @@ impl std::fmt::Display for StatePersistenceError {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum EntryEditAction {
+    Update,
+    Delete,
+}
+
+#[derive(Clone, Debug)]
+pub struct EntryEditInfo {
+    pub entry: TimeEntry,
+    pub action: EntryEditAction,
+}
+
 impl State {
     pub fn update_from_context(self, me: ExtendedMe) -> Self {
         let ws_id = me
@@ -118,6 +130,35 @@ impl State {
         match &self.running_entry {
             None => old,
             Some(e) => old + e.get_duration(),
+        }
+    }
+
+    pub fn apply_change(&mut self, change: EntryEditInfo) {
+        match change.action {
+            EntryEditAction::Delete => {
+                if self
+                    .running_entry
+                    .as_ref()
+                    .is_some_and(|e| e.id == change.entry.id)
+                {
+                    self.running_entry = None;
+                }
+                self.time_entries.retain(|e| e.id != change.entry.id);
+            }
+            EntryEditAction::Update => {
+                if self
+                    .running_entry
+                    .as_ref()
+                    .is_some_and(|e| e.id == change.entry.id)
+                {
+                    self.running_entry = Some(change.entry.clone());
+                }
+                for e in self.time_entries.iter_mut() {
+                    if e.id == change.entry.id {
+                        change.entry.clone_into(e)
+                    }
+                }
+            }
         }
     }
 }
