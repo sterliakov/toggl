@@ -1,4 +1,4 @@
-## 0.2.4 (unreleased)
+## 0.2.4
 
 * bugfix: description editor no longer handles keyboard shortcuts when not focused.
 * feat: implement optimistic update to make fewer API requests and stay under API
