@@ -6,7 +6,7 @@ use log::debug;
 use serde::{Deserialize, Serialize, Serializer};
 
 use crate::entities::{MaybeProject, Project, ProjectId, WorkspaceId};
-use crate::utils::{duration_to_hms, Client, NetResult};
+use crate::utils::{duration_to_hms, maybe_vec_deserialize, Client, NetResult};
 use crate::widgets::icon_button;
 
 fn datetime_serialize_utc<S: Serializer>(
@@ -26,20 +26,15 @@ fn maybe_datetime_serialize_utc<S: Serializer>(
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Default))]
 pub struct TimeEntry {
-    pub at: String,
-    pub billable: bool,
     pub description: Option<String>,
     pub duration: i64,
     pub id: u64,
-    pub permissions: Option<Vec<String>>,
     pub project_id: Option<ProjectId>,
     #[serde(serialize_with = "datetime_serialize_utc")]
     pub start: DateTime<Local>,
     #[serde(serialize_with = "maybe_datetime_serialize_utc")]
     pub stop: Option<DateTime<Local>>,
-    #[serde(serialize_with = "maybe_datetime_serialize_utc")]
-    pub server_deleted_at: Option<DateTime<Local>>,
-    pub tag_ids: Vec<u64>,
+    #[serde(deserialize_with = "maybe_vec_deserialize")]
     pub tags: Vec<String>,
     pub task_id: Option<u64>,
     pub user_id: u64,
@@ -134,7 +129,7 @@ impl TimeEntry {
         workspace_id: WorkspaceId,
         project_id: Option<ProjectId>,
         client: &Client,
-    ) -> NetResult<()> {
+    ) -> NetResult<TimeEntry> {
         debug!("Creating a time entry...");
         let entry = CreateTimeEntry {
             created_with: "ST-Toggl-Client".to_string(),
@@ -153,10 +148,11 @@ impl TimeEntry {
             .body_json(&entry)?
             .send()
             .await?;
-        Client::check_status(&mut res).await
+        Client::check_status(&mut res).await?;
+        res.body_json().await
     }
 
-    pub async fn duplicate(self, client: &Client) -> NetResult<()> {
+    pub async fn duplicate(self, client: &Client) -> NetResult<TimeEntry> {
         Self::create_running(
             self.description,
             self.workspace_id,

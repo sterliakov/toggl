@@ -264,8 +264,10 @@ impl App {
                     RunningEntryMessage::Error(err) => {
                         return Command::done(Message::Error(err));
                     }
-                    RunningEntryMessage::Reload => {
-                        return Command::done(Message::Reload);
+                    RunningEntryMessage::SyncUpdate(change) => {
+                        if self.state.apply_change(change).is_err() {
+                            return Command::done(Message::Reload);
+                        }
                     }
                     other => {
                         return temp_state
@@ -346,8 +348,10 @@ impl App {
                 Message::EditTimeEntryProxy(
                     EditTimeEntryMessage::Completed(change),
                 ) => {
-                    self.state.apply_change(change);
                     self.screen = Screen::Loaded(TemporaryState::default());
+                    if self.state.apply_change(change).is_err() {
+                        return Command::done(Message::Reload);
+                    }
                 }
                 Message::EditTimeEntryProxy(EditTimeEntryMessage::Abort) => {
                     self.screen = Screen::Loaded(TemporaryState::default());

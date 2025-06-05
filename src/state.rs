@@ -40,6 +40,7 @@ impl std::fmt::Display for StatePersistenceError {
 
 #[derive(Clone, Debug)]
 pub enum EntryEditAction {
+    Create,
     Update,
     Delete,
 }
@@ -133,8 +134,26 @@ impl State {
         }
     }
 
-    pub fn apply_change(&mut self, change: EntryEditInfo) {
+    pub fn apply_change(&mut self, change: EntryEditInfo) -> Result<(), ()> {
+        //! Apply an optimistic update.
+        //!
+        //! If Ok(), the changes are unambiguous. Otherwise a full resync
+        //! should be performed.
         match change.action {
+            EntryEditAction::Create => {
+                if self.running_entry.is_some() && change.entry.stop.is_none() {
+                    // Created a running entry without explicitly stopping
+                    // the previous one
+                    return Err(());
+                }
+                if change.entry.stop.is_none() {
+                    self.running_entry = Some(change.entry.clone());
+                } else {
+                    self.time_entries.insert(0, change.entry.clone());
+                    self.time_entries.sort_by_key(|e| e.start);
+                }
+                Ok(())
+            }
             EntryEditAction::Delete => {
                 if self
                     .running_entry
@@ -144,20 +163,48 @@ impl State {
                     self.running_entry = None;
                 }
                 self.time_entries.retain(|e| e.id != change.entry.id);
+                Ok(())
             }
             EntryEditAction::Update => {
-                if self
-                    .running_entry
-                    .as_ref()
-                    .is_some_and(|e| e.id == change.entry.id)
-                {
-                    self.running_entry = Some(change.entry.clone());
+                match (&self.running_entry, change.entry.stop) {
+                    (None, None) => {
+                        // Some entry edited to become running
+                        self.running_entry = Some(change.entry.clone());
+                        self.time_entries.retain(|e| e.id != change.entry.id);
+                        return Ok(());
+                    }
+                    (Some(old), None) => {
+                        if old.id == change.entry.id {
+                            // Current running entry edited.
+                            self.running_entry = Some(change.entry.clone());
+                            return Ok(());
+                        } else {
+                            // Edited to make an entry running while another entry
+                            // was running. Back to the server - previous entry
+                            // was stopped when a new one was submitted, but we
+                            // don't know exact time.
+                            return Err(());
+                        }
+                    }
+                    (Some(old), Some(_)) if old.id == change.entry.id => {
+                        // Entry stopped
+                        self.running_entry = None;
+                        self.time_entries.insert(0, change.entry.clone());
+                        self.time_entries.sort_by_key(|e| e.start);
+                        return Ok(());
+                    }
+                    _ => {}
                 }
+                // In all other cases the edit should belong to some old entry
                 for e in self.time_entries.iter_mut() {
                     if e.id == change.entry.id {
-                        change.entry.clone_into(e)
+                        change.entry.clone_into(e);
+                        return Ok(());
                     }
                 }
+                // Something went wrong - no match
+                error!("Unable to update entry {}, reloading", change.entry.id);
+                Err(())
             }
         }
     }
