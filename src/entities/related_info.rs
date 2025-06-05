@@ -1,17 +1,10 @@
 use log::info;
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 
 use super::{Tag, WorkspaceId};
 use crate::entities::{Preferences, Project, Workspace};
 use crate::time_entry::TimeEntry;
 use crate::utils::{maybe_vec_deserialize, Client, NetResult};
-
-fn maybe_vec_deserialize<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
-    data: D,
-) -> Result<Vec<T>, D::Error> {
-    let maybe: Option<Vec<T>> = Deserialize::deserialize(data)?;
-    Ok(maybe.unwrap_or_default())
-}
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct ExtendedMe {
