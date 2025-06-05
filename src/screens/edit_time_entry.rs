@@ -226,15 +226,12 @@ impl EditTimeEntry {
         api_token: String,
     ) -> EditTimeEntryMessage {
         let client = &Client::from_api_token(&api_token);
-        if let Err(message) =
-            entry.save(client).await.map_err(|e| e.to_string())
-        {
-            EditTimeEntryMessage::Error(message)
-        } else {
-            EditTimeEntryMessage::Completed(EntryEditInfo {
-                entry,
+        match entry.save(client).await {
+            Err(e) => EditTimeEntryMessage::Error(e.to_string()),
+            Ok(new_entry) => EditTimeEntryMessage::Completed(EntryEditInfo {
+                entry: new_entry,
                 action: EntryEditAction::Update,
-            })
+            }),
         }
     }
 
@@ -243,10 +240,8 @@ impl EditTimeEntry {
         api_token: String,
     ) -> EditTimeEntryMessage {
         let client = &Client::from_api_token(&api_token);
-        if let Err(message) =
-            entry.delete(client).await.map_err(|e| e.to_string())
-        {
-            EditTimeEntryMessage::Error(message)
+        if let Err(message) = entry.delete(client).await {
+            EditTimeEntryMessage::Error(message.to_string())
         } else {
             EditTimeEntryMessage::Completed(EntryEditInfo {
                 entry,
