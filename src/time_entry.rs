@@ -79,7 +79,7 @@ impl TimeEntry {
         }
     }
 
-    pub async fn save(&self, client: &Client) -> NetResult<()> {
+    pub async fn save(&self, client: &Client) -> NetResult<TimeEntry> {
         debug!("Updating a time entry {}...", self.id);
         let mut res = client
             .put(format!(
@@ -91,10 +91,11 @@ impl TimeEntry {
             .body_json(&self)?
             .send()
             .await?;
-        Client::check_status(&mut res).await
+        Client::check_status(&mut res).await?;
+        res.body_json().await
     }
 
-    pub async fn stop(&self, client: &Client) -> NetResult<()> {
+    pub async fn stop(&self, client: &Client) -> NetResult<TimeEntry> {
         debug!("Stopping a time entry {}...", self.id);
         assert!(self.stop.is_none());
         let mut res = client
@@ -106,7 +107,8 @@ impl TimeEntry {
             ))
             .send()
             .await?;
-        Client::check_status(&mut res).await
+        Client::check_status(&mut res).await?;
+        res.body_json().await
     }
 
     pub async fn delete(&self, client: &Client) -> NetResult<()> {

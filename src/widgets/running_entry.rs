@@ -119,8 +119,8 @@ impl RunningEntry {
                         let client = Client::from_api_token(&token);
                         match entry.stop(&client).await {
                             Err(e) => Error(e.to_string()),
-                            Ok(_) => SyncUpdate(EntryEditInfo {
-                                action: EntryEditAction::Create,
+                            Ok(entry) => SyncUpdate(EntryEditInfo {
+                                action: EntryEditAction::Update,
                                 entry,
                             }),
                         }
