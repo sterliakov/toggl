@@ -10,8 +10,8 @@ use crate::state::{EntryEditAction, EntryEditInfo, State};
 use crate::time_entry::TimeEntry;
 use crate::utils::{Client, ExactModifiers};
 use crate::widgets::{
-    close_button, DateTimeEditMessage, DateTimeWidget, TextEditorExt,
-    TextEditorMessage,
+    close_button, DateTimeEditMessage, DateTimeWidget, TagEditor,
+    TagEditorMessage, TextEditorExt, TextEditorMessage,
 };
 
 #[derive(Debug)]
@@ -24,11 +24,13 @@ pub struct EditTimeEntry {
     error: Option<String>,
     projects: Vec<MaybeProject>,
     selected_project: MaybeProject,
+    tag_editor: TagEditor,
 }
 
 #[derive(Clone, Debug)]
 pub enum EditTimeEntryMessage {
     DescriptionEdited(TextEditorMessage),
+    TagsEdited(TagEditorMessage),
     ProjectSelected(MaybeProject),
     StartEdited(DateTimeEditMessage),
     StopEdited(DateTimeEditMessage),
@@ -58,6 +60,7 @@ impl EditTimeEntry {
         let projects: Vec<MaybeProject> = std::iter::once(MaybeProject::None)
             .chain(state.projects.iter().cloned().map(|p| p.into()))
             .collect();
+        let tags = entry.tags.clone();
         Self {
             entry,
             api_token: state.api_token.clone(),
@@ -67,6 +70,10 @@ impl EditTimeEntry {
             error: None,
             projects,
             selected_project,
+            tag_editor: TagEditor::new(
+                state.tags.iter().map(|t| t.name.clone()).collect(),
+                tags,
+            ),
         }
     }
 
@@ -104,6 +111,7 @@ impl EditTimeEntry {
                 };
                 base
             }),
+            self.tag_editor.view().map(EditTimeEntryMessage::TagsEdited),
             row![
                 button("Save")
                     .on_press(EditTimeEntryMessage::Submit)
@@ -132,6 +140,9 @@ impl EditTimeEntry {
         match message {
             DescriptionEdited(action) => {
                 self.description_editor.update(action);
+            }
+            TagsEdited(action) => {
+                self.tag_editor.update(action);
             }
             StartEdited(DateTimeEditMessage::Finish)
             | StopEdited(DateTimeEditMessage::Finish) => {
@@ -181,6 +192,7 @@ impl EditTimeEntry {
                 self.entry.duration = duration.unwrap_or(-1);
                 self.entry.description =
                     Some(self.description_editor.get_value());
+                self.entry.tags = self.tag_editor.get_value();
                 return Command::future(Self::submit(
                     self.entry.clone(),
                     self.api_token.clone(),

@@ -87,7 +87,6 @@ cargo install --path .
 A few more things would be nice to implement:
 
 * Login with SSO
-* Editing entry tags
 * Ability to minimize to tray
 
 ## Reporting issues

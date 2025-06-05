@@ -1,7 +1,7 @@
 use log::info;
 use serde::Deserialize;
 
-use super::WorkspaceId;
+use super::{Tag, WorkspaceId};
 use crate::entities::{Preferences, Project, Workspace};
 use crate::time_entry::TimeEntry;
 use crate::utils::{maybe_vec_deserialize, Client, NetResult};
@@ -14,6 +14,8 @@ pub struct ExtendedMe {
     pub workspaces: Vec<Workspace>,
     #[serde(default, deserialize_with = "maybe_vec_deserialize")]
     pub time_entries: Vec<TimeEntry>,
+    #[serde(default, deserialize_with = "maybe_vec_deserialize")]
+    pub tags: Vec<Tag>,
     #[serde(default)]
     pub beginning_of_week: u8,
     #[serde(default)]

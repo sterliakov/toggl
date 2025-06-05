@@ -3,6 +3,7 @@
 * bugfix: description editor no longer handles keyboard shortcuts when not focused.
 * feat: implement optimistic update to make fewer API requests and stay under API
   rate limits.
+* feat: added tag editor
 
 ## 0.2.3
 
