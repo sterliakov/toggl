@@ -5,8 +5,10 @@ use chrono::{
 use iced::keyboard::Modifiers;
 
 mod client;
+mod serde;
 
 pub use client::{Client, Result as NetResult};
+pub use serde::maybe_vec_deserialize;
 
 pub fn duration_to_hms(duration: &Duration) -> String {
     let total_seconds = duration.num_seconds();

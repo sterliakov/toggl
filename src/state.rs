@@ -38,6 +38,19 @@ impl std::fmt::Display for StatePersistenceError {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum EntryEditAction {
+    Create,
+    Update,
+    Delete,
+}
+
+#[derive(Clone, Debug)]
+pub struct EntryEditInfo {
+    pub entry: TimeEntry,
+    pub action: EntryEditAction,
+}
+
 impl State {
     pub fn update_from_context(self, me: ExtendedMe) -> Self {
         let ws_id = me
@@ -118,6 +131,88 @@ impl State {
         match &self.running_entry {
             None => old,
             Some(e) => old + e.get_duration(),
+        }
+    }
+
+    fn sort_entries(&mut self) {
+        self.time_entries
+            .sort_by_key(|e| std::cmp::Reverse(e.start));
+    }
+
+    pub fn apply_change(&mut self, change: EntryEditInfo) -> Result<(), ()> {
+        //! Apply an optimistic update.
+        //!
+        //! If Ok(), the changes are unambiguous. Otherwise a full resync
+        //! should be performed.
+
+        match change.action {
+            EntryEditAction::Create => {
+                if self.running_entry.is_some() && change.entry.stop.is_none() {
+                    // Created a running entry without explicitly stopping
+                    // the previous one
+                    return Err(());
+                }
+                if change.entry.stop.is_none() {
+                    self.running_entry = Some(change.entry.clone());
+                } else {
+                    self.time_entries.insert(0, change.entry.clone());
+                    self.sort_entries();
+                }
+                Ok(())
+            }
+            EntryEditAction::Delete => {
+                if self
+                    .running_entry
+                    .as_ref()
+                    .is_some_and(|e| e.id == change.entry.id)
+                {
+                    self.running_entry = None;
+                }
+                self.time_entries.retain(|e| e.id != change.entry.id);
+                Ok(())
+            }
+            EntryEditAction::Update => {
+                match (&self.running_entry, change.entry.stop) {
+                    (None, None) => {
+                        // Some entry edited to become running
+                        self.running_entry = Some(change.entry.clone());
+                        self.time_entries.retain(|e| e.id != change.entry.id);
+                        return Ok(());
+                    }
+                    (Some(old), None) => {
+                        if old.id == change.entry.id {
+                            // Current running entry edited.
+                            self.running_entry = Some(change.entry.clone());
+                            return Ok(());
+                        } else {
+                            // Edited to make an entry running while another entry
+                            // was running. Back to the server - previous entry
+                            // was stopped when a new one was submitted, but we
+                            // don't know exact time.
+                            return Err(());
+                        }
+                    }
+                    (Some(old), Some(_)) if old.id == change.entry.id => {
+                        // Entry stopped
+                        self.running_entry = None;
+                        self.time_entries.insert(0, change.entry.clone());
+                        self.sort_entries();
+                        return Ok(());
+                    }
+                    _ => {}
+                }
+                // In all other cases the edit should belong to some old entry
+                for e in self.time_entries.iter_mut() {
+                    if e.id == change.entry.id {
+                        change.entry.clone_into(e);
+                        self.sort_entries();
+                        return Ok(());
+                    }
+                }
+                // Something went wrong - no match
+                error!("Unable to update entry {}, reloading", change.entry.id);
+                Err(())
+            }
         }
     }
 }
@@ -367,5 +462,163 @@ mod test {
         let me = ExtendedMe::load(&client).await.expect("get me");
         let state = State::default().update_from_context(me);
         assert_eq!(state.customization.week_start_day, new_day);
+    }
+}
+
+#[cfg(test)]
+mod test_updates {
+    use chrono::{DateTime, Local, TimeDelta};
+
+    use super::{EntryEditAction, EntryEditInfo, State};
+    use crate::time_entry::TimeEntry;
+
+    fn entry(
+        now: DateTime<Local>,
+        start: i64,
+        duration: Option<i64>,
+        id: u64,
+    ) -> TimeEntry {
+        if let Some(duration) = duration {
+            TimeEntry {
+                start: now - TimeDelta::minutes(start),
+                stop: Some(now - TimeDelta::minutes(start - duration)),
+                duration: duration * 60,
+                id,
+                ..TimeEntry::default()
+            }
+        } else {
+            TimeEntry {
+                start: now - TimeDelta::minutes(start),
+                stop: None,
+                duration: -1,
+                id,
+                ..TimeEntry::default()
+            }
+        }
+    }
+
+    #[test]
+    fn test_state_optimistic_update_completed() {
+        let now = Local::now() - TimeDelta::days(1);
+        // Update old entries
+        let running = entry(now, 1, None, 2);
+        for running_entry in [None, Some(running)] {
+            let mut state = State {
+                time_entries: vec![entry(now, 11, Some(10), 1)],
+                running_entry: running_entry.clone(),
+                ..State::default()
+            };
+
+            assert!(state
+                .apply_change(EntryEditInfo {
+                    action: EntryEditAction::Update,
+                    entry: entry(now, 21, Some(10), 1),
+                })
+                .is_ok());
+            assert_eq!(state.time_entries.len(), 1);
+            assert_eq!(state.time_entries[0], entry(now, 21, Some(10), 1));
+            assert_eq!(state.running_entry, running_entry);
+
+            assert!(state
+                .apply_change(EntryEditInfo {
+                    action: EntryEditAction::Delete,
+                    entry: entry(now, 21, Some(10), 1),
+                })
+                .is_ok());
+            assert_eq!(state.running_entry, running_entry);
+            assert_eq!(state.time_entries.len(), 0);
+
+            assert!(state
+                .apply_change(EntryEditInfo {
+                    action: EntryEditAction::Create,
+                    entry: entry(now, 21, Some(10), 1),
+                })
+                .is_ok());
+            assert_eq!(state.time_entries.len(), 1);
+            assert_eq!(state.time_entries[0], entry(now, 21, Some(10), 1));
+            assert_eq!(state.running_entry, running_entry);
+
+            // Make it running again, conflicts if already running
+            let res = state.apply_change(EntryEditInfo {
+                action: EntryEditAction::Update,
+                entry: entry(now, 21, None, 1),
+            });
+            if running_entry.is_some() {
+                assert!(res.is_err());
+                // state unmodified
+            } else {
+                assert!(state.time_entries.is_empty());
+                assert_eq!(state.running_entry, Some(entry(now, 21, None, 1)));
+            }
+        }
+    }
+
+    #[test]
+    fn test_state_optimistic_update_running() {
+        let now = Local::now() - TimeDelta::days(1);
+        let old = entry(now, 21, Some(10), 1);
+        let mut state = State {
+            time_entries: vec![old.clone()],
+            running_entry: Some(entry(now, 11, None, 2)),
+            ..State::default()
+        };
+
+        assert!(state
+            .apply_change(EntryEditInfo {
+                action: EntryEditAction::Update,
+                entry: entry(now, 12, None, 2),
+            })
+            .is_ok());
+        assert_eq!(state.time_entries.len(), 1);
+        assert_eq!(state.time_entries[0], old);
+        assert_eq!(state.running_entry, Some(entry(now, 12, None, 2)));
+
+        assert!(state
+            .apply_change(EntryEditInfo {
+                action: EntryEditAction::Update,
+                entry: entry(now, 11, Some(1), 2),
+            })
+            .is_ok());
+        assert_eq!(state.time_entries.len(), 2);
+        assert_eq!(state.time_entries, [entry(now, 11, Some(1), 2), old]);
+        assert_eq!(state.running_entry, None);
+    }
+
+    #[test]
+    fn test_state_optimistic_update_running_2() {
+        let now = Local::now() - TimeDelta::days(1);
+        let old = entry(now, 21, Some(10), 1);
+        let mut state = State {
+            time_entries: vec![old.clone()],
+            running_entry: Some(entry(now, 11, None, 2)),
+            ..State::default()
+        };
+
+        assert!(state
+            .apply_change(EntryEditInfo {
+                action: EntryEditAction::Delete,
+                entry: entry(now, 12, None, 2),
+            })
+            .is_ok());
+        assert_eq!(state.time_entries.len(), 1);
+        assert_eq!(state.time_entries[0], old);
+        assert_eq!(state.running_entry, None);
+
+        assert!(state
+            .apply_change(EntryEditInfo {
+                action: EntryEditAction::Create,
+                entry: entry(now, 11, None, 2),
+            })
+            .is_ok());
+        assert_eq!(state.time_entries.len(), 1);
+        assert_eq!(state.time_entries[0], old);
+        assert_eq!(state.running_entry, Some(entry(now, 11, None, 2)));
+
+        assert!(state
+            .apply_change(EntryEditInfo {
+                action: EntryEditAction::Create,
+                entry: entry(now, 11, None, 3),
+            })
+            .is_err());
     }
 }

@@ -20,6 +20,8 @@ pub enum DateTimeEditMessage {
     OpenDatePicker,
     CloseDatePicker,
     SubmitDate(Date),
+    /// Should be handled externally: Enter pressed (submit)
+    Finish,
 }
 
 #[derive(Clone, Debug)]
@@ -60,7 +62,8 @@ impl DateTimeWidget {
         column![row![
             text_input(&self.input_label, &self.full_text)
                 .id(self.input_id.clone())
-                .on_input(DateTimeEditMessage::EditText),
+                .on_input(DateTimeEditMessage::EditText)
+                .on_submit(DateTimeEditMessage::Finish),
             self.date_picker(ref_time),
             self.time_picker(ref_time, customization),
         ]]
@@ -113,8 +116,10 @@ impl DateTimeWidget {
         message: DateTimeEditMessage,
         customization: &Customization,
     ) -> Command<DateTimeEditMessage> {
+        use DateTimeEditMessage::*;
+
         match message {
-            DateTimeEditMessage::EditText(text) => {
+            EditText(text) => {
                 if let Ok(Some(dt)) = customization.parse_datetime(&text) {
                     self.dt = Some(dt);
                     self.error = None;
@@ -124,30 +129,31 @@ impl DateTimeWidget {
                 }
                 self.full_text = text;
             }
-            DateTimeEditMessage::OpenTimePicker => {
+            OpenTimePicker => {
                 self.show_time_picker = true;
             }
-            DateTimeEditMessage::CloseTimePicker => {
+            CloseTimePicker => {
                 self.show_time_picker = false;
             }
-            DateTimeEditMessage::SubmitTime(time) => {
+            SubmitTime(time) => {
                 self.dt = Some(with_time(self.dt, time, Local::now));
                 self.full_text = customization.format_datetime(&self.dt);
                 self.error = None;
                 self.show_time_picker = false;
             }
-            DateTimeEditMessage::OpenDatePicker => {
+            OpenDatePicker => {
                 self.show_date_picker = true;
             }
-            DateTimeEditMessage::CloseDatePicker => {
+            CloseDatePicker => {
                 self.show_date_picker = false;
             }
-            DateTimeEditMessage::SubmitDate(date) => {
+            SubmitDate(date) => {
                 self.dt = Some(with_date(self.dt, date, Local::now));
                 self.full_text = customization.format_datetime(&self.dt);
                 self.error = None;
                 self.show_date_picker = false;
             }
+            Finish => {}
         };
         Command::none()
     }

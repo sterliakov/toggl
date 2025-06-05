@@ -11,6 +11,7 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{debug, error, info};
 use screens::{LegalInfo, LegalInfoMessage};
+use state::{EntryEditAction, EntryEditInfo};
 use utils::duration_to_hm;
 use widgets::{default_button_text, menu_button};
 
@@ -110,6 +111,7 @@ enum Message {
     KeyPressed(NamedKey, keyboard::Modifiers),
     SetUpdateStep(UpdateStep),
     OpenLegalScreen,
+    OptimisticUpdate(EntryEditInfo),
 }
 
 lazy_static! {
@@ -204,6 +206,13 @@ impl App {
             Message::OpenLegalScreen => {
                 self.screen = Screen::Legal(LegalInfo::new());
             }
+            Message::OptimisticUpdate(change) => {
+                return if self.state.apply_change(change).is_err() {
+                    Command::done(Message::Reload)
+                } else {
+                    Command::batch(vec![self.update_icon(), self.save_state()])
+                }
+            }
             _ => {}
         };
 
@@ -251,7 +260,12 @@ impl App {
                         let client = Client::from_api_token(&token);
                         let fut = e.duplicate(&client);
                         match fut.await {
-                            Ok(_) => Message::Reload,
+                            Ok(new_entry) => {
+                                Message::OptimisticUpdate(EntryEditInfo {
+                                    action: EntryEditAction::Create,
+                                    entry: new_entry,
+                                })
+                            }
                             Err(e) => Message::Error(e.to_string()),
                         }
                     });
@@ -264,8 +278,10 @@ impl App {
                     RunningEntryMessage::Error(err) => {
                         return Command::done(Message::Error(err));
                     }
-                    RunningEntryMessage::Reload => {
-                        return Command::done(Message::Reload);
+                    RunningEntryMessage::SyncUpdate(change) => {
+                        return Command::done(Message::OptimisticUpdate(
+                            change,
+                        ));
                     }
                     other => {
                         return temp_state
@@ -344,13 +360,13 @@ impl App {
             },
             Screen::EditEntry(screen) => match message {
                 Message::EditTimeEntryProxy(
-                    EditTimeEntryMessage::Completed,
+                    EditTimeEntryMessage::Completed(change),
                 ) => {
-                    self.screen = Screen::Loading;
-                    return Command::perform(State::load(), Message::Loaded);
+                    self.screen = Screen::Loaded(TemporaryState::default());
+                    return Command::done(Message::OptimisticUpdate(change));
                 }
                 Message::EditTimeEntryProxy(EditTimeEntryMessage::Abort) => {
-                    self.screen = Screen::Loaded(TemporaryState::default())
+                    self.screen = Screen::Loaded(TemporaryState::default());
                 }
                 Message::EditTimeEntryProxy(msg) => {
                     return screen

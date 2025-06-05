@@ -6,7 +6,7 @@ use iced::{keyboard, Element, Fill, Length, Task as Command};
 
 use crate::customization::Customization;
 use crate::entities::MaybeProject;
-use crate::state::State;
+use crate::state::{EntryEditAction, EntryEditInfo, State};
 use crate::time_entry::TimeEntry;
 use crate::utils::{Client, ExactModifiers};
 use crate::widgets::{
@@ -35,7 +35,7 @@ pub enum EditTimeEntryMessage {
     Submit,
     Delete,
     Abort,
-    Completed,
+    Completed(EntryEditInfo),
     Error(String),
 }
 
@@ -127,33 +127,37 @@ impl EditTimeEntry {
         message: EditTimeEntryMessage,
         customization: &Customization,
     ) -> Command<EditTimeEntryMessage> {
+        use EditTimeEntryMessage::*;
+
         match message {
-            EditTimeEntryMessage::DescriptionEdited(action) => {
+            DescriptionEdited(action) => {
                 self.description_editor.update(action);
             }
-            EditTimeEntryMessage::StartEdited(start) => {
+            StartEdited(DateTimeEditMessage::Finish)
+            | StopEdited(DateTimeEditMessage::Finish) => {
+                return Command::done(Submit);
+            }
+            StartEdited(start) => {
                 return self
                     .start_dt
                     .update(start, customization)
-                    .map(EditTimeEntryMessage::StartEdited)
+                    .map(StartEdited)
             }
-            EditTimeEntryMessage::StopEdited(stop) => {
+            StopEdited(stop) => {
                 return self
                     .stop_dt
                     .update(stop, customization)
-                    .map(EditTimeEntryMessage::StartEdited)
+                    .map(StartEdited)
             }
-            EditTimeEntryMessage::ProjectSelected(p) => {
+            ProjectSelected(p) => {
                 self.entry.project_id = p.id();
                 self.selected_project = p;
             }
-            EditTimeEntryMessage::Submit => {
+            Submit => {
                 match self.start_dt.get_value() {
-                    Err(e) => {
-                        return Command::done(EditTimeEntryMessage::Error(e))
-                    }
+                    Err(e) => return Command::done(Error(e)),
                     Ok(None) => {
-                        return Command::done(EditTimeEntryMessage::Error(
+                        return Command::done(Error(
                             "Start cannot be blank".to_string(),
                         ))
                     }
@@ -162,7 +166,7 @@ impl EditTimeEntry {
                 match self.stop_dt.get_value() {
                     Ok(stop) => self.entry.stop = stop,
                     Err(e) => {
-                        return Command::done(EditTimeEntryMessage::Error(e));
+                        return Command::done(Error(e));
                     }
                 };
                 let duration = self
@@ -170,7 +174,7 @@ impl EditTimeEntry {
                     .stop
                     .map(|stop| (stop - self.entry.start).num_seconds());
                 if duration.unwrap_or(1) < 0 {
-                    return Command::done(EditTimeEntryMessage::Error(
+                    return Command::done(Error(
                         "Start must come before end!".to_string(),
                     ));
                 };
@@ -182,15 +186,15 @@ impl EditTimeEntry {
                     self.api_token.clone(),
                 ));
             }
-            EditTimeEntryMessage::Delete => {
+            Delete => {
                 return Command::future(Self::delete(
                     self.entry.clone(),
                     self.api_token.clone(),
                 ));
             }
-            EditTimeEntryMessage::Abort => {}
-            EditTimeEntryMessage::Completed => {}
-            EditTimeEntryMessage::Error(err) => {
+            Abort => {}
+            Completed(_) => {}
+            Error(err) => {
                 self.error = Some(err);
             }
         };
@@ -222,12 +226,12 @@ impl EditTimeEntry {
         api_token: String,
     ) -> EditTimeEntryMessage {
         let client = &Client::from_api_token(&api_token);
-        if let Err(message) =
-            entry.save(client).await.map_err(|e| e.to_string())
-        {
-            EditTimeEntryMessage::Error(message)
-        } else {
-            EditTimeEntryMessage::Completed
+        match entry.save(client).await {
+            Err(e) => EditTimeEntryMessage::Error(e.to_string()),
+            Ok(new_entry) => EditTimeEntryMessage::Completed(EntryEditInfo {
+                entry: new_entry,
+                action: EntryEditAction::Update,
+            }),
         }
     }
 
@@ -236,12 +240,13 @@ impl EditTimeEntry {
         api_token: String,
     ) -> EditTimeEntryMessage {
         let client = &Client::from_api_token(&api_token);
-        if let Err(message) =
-            entry.delete(client).await.map_err(|e| e.to_string())
-        {
-            EditTimeEntryMessage::Error(message)
+        if let Err(message) = entry.delete(client).await {
+            EditTimeEntryMessage::Error(message.to_string())
         } else {
-            EditTimeEntryMessage::Completed
+            EditTimeEntryMessage::Completed(EntryEditInfo {
+                entry,
+                action: EntryEditAction::Delete,
+            })
         }
     }
 }

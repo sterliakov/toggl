@@ -3,7 +3,7 @@ use iced::widget::{button, column, container, row, text, text_input};
 use iced::{Color, Length, Task as Command};
 use log::{info, warn};
 
-use crate::state::State;
+use crate::state::{EntryEditAction, EntryEditInfo, State};
 use crate::time_entry::TimeEntry;
 use crate::utils::Client;
 use crate::widgets::icon_button;
@@ -22,7 +22,7 @@ pub enum RunningEntryMessage {
     // Public
     StartEditing(Box<TimeEntry>),
     Error(String),
-    Reload,
+    SyncUpdate(EntryEditInfo),
 }
 
 impl RunningEntry {
@@ -100,7 +100,10 @@ impl RunningEntry {
                     );
                     match fut.await {
                         Err(e) => Error(e.to_string()),
-                        Ok(_) => Reload,
+                        Ok(entry) => SyncUpdate(EntryEditInfo {
+                            action: EntryEditAction::Create,
+                            entry,
+                        }),
                     }
                 })
             }
@@ -116,7 +119,10 @@ impl RunningEntry {
                         let client = Client::from_api_token(&token);
                         match entry.stop(&client).await {
                             Err(e) => Error(e.to_string()),
-                            Ok(_) => Reload,
+                            Ok(entry) => SyncUpdate(EntryEditInfo {
+                                action: EntryEditAction::Update,
+                                entry,
+                            }),
                         }
                     })
                 } else {
