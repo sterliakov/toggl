@@ -150,7 +150,8 @@ impl State {
                     self.running_entry = Some(change.entry.clone());
                 } else {
                     self.time_entries.insert(0, change.entry.clone());
-                    self.time_entries.sort_by_key(|e| e.start);
+                    self.time_entries
+                        .sort_by_key(|e| std::cmp::Reverse(e.start));
                 }
                 Ok(())
             }
@@ -190,7 +191,8 @@ impl State {
                         // Entry stopped
                         self.running_entry = None;
                         self.time_entries.insert(0, change.entry.clone());
-                        self.time_entries.sort_by_key(|e| e.start);
+                        self.time_entries
+                            .sort_by_key(|e| std::cmp::Reverse(e.start));
                         return Ok(());
                     }
                     _ => {}

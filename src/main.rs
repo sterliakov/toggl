@@ -267,6 +267,8 @@ impl App {
                     RunningEntryMessage::SyncUpdate(change) => {
                         if self.state.apply_change(change).is_err() {
                             return Command::done(Message::Reload);
+                        } else {
+                            return self.update_icon();
                         }
                     }
                     other => {
@@ -351,6 +353,8 @@ impl App {
                     self.screen = Screen::Loaded(TemporaryState::default());
                     if self.state.apply_change(change).is_err() {
                         return Command::done(Message::Reload);
+                    } else {
+                        return self.update_icon();
                     }
                 }
                 Message::EditTimeEntryProxy(EditTimeEntryMessage::Abort) => {
