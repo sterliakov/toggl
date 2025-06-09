@@ -26,7 +26,10 @@ pub enum RunningEntryMessage {
 }
 
 impl RunningEntry {
-    pub fn view(&self, state: &State) -> iced::Element<RunningEntryMessage> {
+    pub fn view(
+        &self,
+        state: &State,
+    ) -> iced::Element<'_, RunningEntryMessage> {
         let Some(entry) = state.running_entry.clone() else {
             return self.new_entry_input();
         };
@@ -134,7 +137,7 @@ impl RunningEntry {
         }
     }
 
-    fn new_entry_input(&self) -> iced::Element<RunningEntryMessage> {
+    fn new_entry_input(&self) -> iced::Element<'_, RunningEntryMessage> {
         row![
             text_input("Create new entry...", &self.draft_description)
                 .id("running-entry-input")

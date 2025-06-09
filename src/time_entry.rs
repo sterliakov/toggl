@@ -216,7 +216,7 @@ impl TimeEntry {
             .unwrap_or_else(|| "<NO DESCRIPTION>".to_string())
     }
 
-    pub fn view(&self, projects: &[Project]) -> Element<TimeEntryMessage> {
+    pub fn view(&self, projects: &[Project]) -> Element<'_, TimeEntryMessage> {
         let project = self.project(projects);
         let name = self.description_text();
         button(

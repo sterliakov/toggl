@@ -25,7 +25,7 @@ impl LoginScreen {
         Self::default()
     }
 
-    pub fn view(&self) -> Element<LoginScreenMessage> {
+    pub fn view(&self) -> Element<'_, LoginScreenMessage> {
         let content = column![
             text_input("Email", &self.email)
                 .id("email-input")

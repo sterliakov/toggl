@@ -80,7 +80,7 @@ impl EditTimeEntry {
     pub fn view(
         &self,
         customization: &Customization,
-    ) -> Element<EditTimeEntryMessage> {
+    ) -> Element<'_, EditTimeEntryMessage> {
         use std::borrow::Borrow;
 
         let content = column![
