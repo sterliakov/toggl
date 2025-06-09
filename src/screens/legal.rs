@@ -19,7 +19,7 @@ impl LegalInfo {
         Self {}
     }
 
-    pub fn view(&self) -> Element<LegalInfoMessage> {
+    pub fn view(&self) -> Element<'_, LegalInfoMessage> {
         let content = column![
             close_button(LegalInfoMessage::Close),
             column![

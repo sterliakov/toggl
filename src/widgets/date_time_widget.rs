@@ -57,7 +57,7 @@ impl DateTimeWidget {
     pub fn view(
         &self,
         customization: &Customization,
-    ) -> Element<DateTimeEditMessage> {
+    ) -> Element<'_, DateTimeEditMessage> {
         let ref_time = self.dt.unwrap_or_else(Local::now);
         column![row![
             text_input(&self.input_label, &self.full_text)
@@ -75,7 +75,7 @@ impl DateTimeWidget {
         &self,
         ref_time: DateTime<Local>,
         customization: &Customization,
-    ) -> TimePicker<DateTimeEditMessage, iced::Theme> {
+    ) -> TimePicker<'_, DateTimeEditMessage, iced::Theme> {
         let but = icon_button(Bootstrap::ClockFill)
             .on_press(DateTimeEditMessage::OpenTimePicker)
             .width(24)
@@ -97,7 +97,7 @@ impl DateTimeWidget {
     fn date_picker(
         &self,
         ref_time: DateTime<Local>,
-    ) -> DatePicker<DateTimeEditMessage, iced::Theme> {
+    ) -> DatePicker<'_, DateTimeEditMessage, iced::Theme> {
         let but = icon_button(Bootstrap::CalendarDateFill)
             .on_press(DateTimeEditMessage::OpenDatePicker)
             .width(24)

@@ -418,7 +418,7 @@ impl App {
         self.screen = Screen::EditEntry(EditTimeEntry::new(entry, &self.state));
     }
 
-    pub fn view(&self) -> Element<Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         match &self.screen {
             Screen::Loading => loading_message(&self.error),
             Screen::Unauthed(screen) => screen.view().map(Message::LoginProxy),
@@ -480,7 +480,7 @@ impl App {
         }
     }
 
-    fn menu(&self) -> Element<Message> {
+    fn menu(&self) -> Element<'_, Message> {
         let selected_ws = self.state.default_workspace;
         let ws_menu = menu::Menu::new(
             self.state
@@ -574,7 +574,9 @@ impl App {
         .into()
     }
 
-    fn week_total(&self) -> menu::Item<Message, iced::Theme, iced::Renderer> {
+    fn week_total(
+        &self,
+    ) -> menu::Item<'_, Message, iced::Theme, iced::Renderer> {
         menu::Item::new(
             menu_button(
                 default_button_text(format!(
@@ -690,7 +692,7 @@ impl App {
     }
 }
 
-fn loading_message<'a>(error: &'a str) -> Element<'a, Message> {
+fn loading_message(error: &str) -> Element<'_, Message> {
     if error.is_empty() {
         center(text("Loading...").width(Fill).align_x(Center).size(48)).into()
     } else {

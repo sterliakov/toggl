@@ -158,7 +158,7 @@ impl UpdateStep {
 
     pub fn view(
         &self,
-    ) -> button::Button<UpdateStep, iced::Theme, iced::Renderer> {
+    ) -> button::Button<'_, UpdateStep, iced::Theme, iced::Renderer> {
         match self {
             UpdateStep::NotStarted => {
                 menu_text("Check for updates", UpdateStep::Checking)
