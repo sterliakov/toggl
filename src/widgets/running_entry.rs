@@ -19,6 +19,7 @@ pub enum RunningEntryMessage {
     Create,
     EditDraft(String),
     Stop,
+    SubmitOk(Box<TimeEntry>),
     // Public
     StartEditing(Box<TimeEntry>),
     Error(String),
@@ -103,12 +104,16 @@ impl RunningEntry {
                     );
                     match fut.await {
                         Err(e) => Error(e.to_string()),
-                        Ok(entry) => SyncUpdate(EntryEditInfo {
-                            action: EntryEditAction::Create,
-                            entry,
-                        }),
+                        Ok(entry) => SubmitOk(Box::new(entry)),
                     }
                 })
+            }
+            SubmitOk(entry) => {
+                self.draft_description = "".to_string();
+                Command::done(SyncUpdate(EntryEditInfo {
+                    action: EntryEditAction::Create,
+                    entry: *entry,
+                }))
             }
             EditDraft(text) => {
                 self.draft_description = text;
