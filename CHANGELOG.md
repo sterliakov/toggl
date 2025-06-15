@@ -1,3 +1,7 @@
+## 0.2.5 (unreleased)
+
+* bugfix: reset running entry description after submission
+
 ## 0.2.4
 
 * bugfix: description editor no longer handles keyboard shortcuts when not focused.
