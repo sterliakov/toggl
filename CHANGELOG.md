@@ -1,4 +1,4 @@
-## 0.2.5 (unreleased)
+## 0.2.5
 
 * bugfix: reset running entry description after submission
 

@@ -103,7 +103,8 @@ this app.
 Make sure to include your OS and relevant system details in your report.
 
 I'm ready to accept pull requests. Make sure to explain what the PR is doing
-and why it is necessary, link to relevant issues if any.
+and why it is necessary, link to relevant issues if any. Try to include tests
+that prevent a similar regression in future.
 
 ## Windows users note
 
