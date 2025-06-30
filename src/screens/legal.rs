@@ -15,7 +15,7 @@ pub enum LegalInfoMessage {
 }
 
 impl LegalInfo {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {}
     }
 

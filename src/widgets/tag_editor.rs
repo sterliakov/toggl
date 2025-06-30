@@ -57,7 +57,7 @@ impl TagEditor {
                 if !self.selected.contains(&self.new_tag) {
                     self.selected.push(self.new_tag.clone());
                 }
-                self.new_tag = "".to_string();
+                self.new_tag = String::new();
             }
         }
     }

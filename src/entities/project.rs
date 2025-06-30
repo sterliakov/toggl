@@ -41,8 +41,8 @@ pub enum MaybeProject {
 impl std::fmt::Display for MaybeProject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MaybeProject::Some(p) => p.fmt(f),
-            MaybeProject::None => f.write_str("---"),
+            Self::Some(p) => p.fmt(f),
+            Self::None => f.write_str("---"),
         }
     }
 }
@@ -72,7 +72,7 @@ impl From<MaybeProject> for Option<Project> {
 }
 
 impl MaybeProject {
-    pub fn id(&self) -> Option<ProjectId> {
+    pub const fn id(&self) -> Option<ProjectId> {
         match self {
             Self::Some(p) => Some(p.id),
             Self::None => None,

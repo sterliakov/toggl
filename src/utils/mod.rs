@@ -56,7 +56,7 @@ pub trait ExactModifiers {
 
 impl ExactModifiers for Modifiers {
     fn is_exact(&self) -> bool {
-        self.bits().count_ones() == 1
+        self.bits().is_power_of_two()
     }
 
     fn is_exact_ctrl_or_cmd(&self) -> bool {
@@ -130,7 +130,7 @@ mod test {
             assert_eq!(
                 to_start_of_week(d, day).to_rfc3339(),
                 format!("{res}{tz_suffix}")
-            )
+            );
         }
     }
 }

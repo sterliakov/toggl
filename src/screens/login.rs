@@ -53,14 +53,14 @@ impl LoginScreen {
         match message {
             LoginScreenMessage::EmailEdited(email) => self.email = email,
             LoginScreenMessage::PasswordEdited(password) => {
-                self.password = password
+                self.password = password;
             }
             LoginScreenMessage::Error(err) => self.error = err,
             LoginScreenMessage::Submit => {
                 return Command::future(self.clone().submit());
             }
             LoginScreenMessage::Completed(_) => {}
-        };
+        }
         Command::none()
     }
 

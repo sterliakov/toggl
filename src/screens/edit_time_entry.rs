@@ -58,7 +58,7 @@ impl EditTimeEntry {
         );
         let selected_project = entry.project(&state.projects);
         let projects: Vec<MaybeProject> = std::iter::once(MaybeProject::None)
-            .chain(state.projects.iter().cloned().map(|p| p.into()))
+            .chain(state.projects.iter().cloned().map(std::convert::Into::into))
             .collect();
         let tags = entry.tags.clone();
         Self {
@@ -108,7 +108,7 @@ impl EditTimeEntry {
                         base.background = p.parsed_color().into();
                     }
                     MaybeProject::None => {}
-                };
+                }
                 base
             }),
             self.tag_editor.view().map(EditTimeEntryMessage::TagsEdited),
@@ -173,13 +173,13 @@ impl EditTimeEntry {
                         ))
                     }
                     Ok(Some(date)) => self.entry.start = date,
-                };
+                }
                 match self.stop_dt.get_value() {
                     Ok(stop) => self.entry.stop = stop,
                     Err(e) => {
                         return Command::done(Error(e));
                     }
-                };
+                }
                 let duration = self
                     .entry
                     .stop
@@ -188,7 +188,7 @@ impl EditTimeEntry {
                     return Command::done(Error(
                         "Start must come before end!".to_string(),
                     ));
-                };
+                }
                 self.entry.duration = duration.unwrap_or(-1);
                 self.entry.description =
                     Some(self.description_editor.get_value());
@@ -209,7 +209,7 @@ impl EditTimeEntry {
             Error(err) => {
                 self.error = Some(err);
             }
-        };
+        }
         Command::none()
     }
 

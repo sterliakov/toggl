@@ -25,8 +25,8 @@ impl TextEditorExt {
     pub fn new(text: &Option<impl ToString>) -> Self {
         let original_text = text
             .as_ref()
-            .map(|s| s.to_string())
-            .unwrap_or("".to_string());
+            .map(std::string::ToString::to_string)
+            .unwrap_or_default();
         Self {
             content: Content::with_text(&original_text),
             history: vec![],
@@ -42,7 +42,7 @@ pub enum TextEditorMessage {
 }
 
 impl TextEditorExt {
-    pub fn view<'a>(&'a self) -> TextEditor<'a, PlainText, TextEditorMessage> {
+    pub fn view(&self) -> TextEditor<'_, PlainText, TextEditorMessage> {
         text_editor(&self.content)
             .key_binding(|press| {
                 if !matches!(press.status, text_editor::Status::Focused) {
@@ -155,7 +155,7 @@ impl TextEditorExt {
     }
 }
 
-fn is_select(action: &Action) -> bool {
+const fn is_select(action: &Action) -> bool {
     matches!(
         action,
         Action::Select(_)

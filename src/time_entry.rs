@@ -79,7 +79,7 @@ impl TimeEntry {
         }
     }
 
-    pub async fn save(&self, client: &Client) -> NetResult<TimeEntry> {
+    pub async fn save(&self, client: &Client) -> NetResult<Self> {
         #[derive(Serialize)]
         struct UpdateRequest<'a> {
             #[serde(flatten)]
@@ -105,7 +105,7 @@ impl TimeEntry {
         res.body_json().await
     }
 
-    pub async fn stop(&self, client: &Client) -> NetResult<TimeEntry> {
+    pub async fn stop(&self, client: &Client) -> NetResult<Self> {
         debug!("Stopping a time entry {}...", self.id);
         assert!(self.stop.is_none());
         let mut res = client
@@ -140,7 +140,7 @@ impl TimeEntry {
         workspace_id: WorkspaceId,
         project_id: Option<ProjectId>,
         client: &Client,
-    ) -> NetResult<TimeEntry> {
+    ) -> NetResult<Self> {
         debug!("Creating a time entry...");
         let entry = CreateTimeEntry {
             created_with: "ST-Toggl-Client".to_string(),
@@ -163,7 +163,7 @@ impl TimeEntry {
         res.body_json().await
     }
 
-    pub async fn duplicate(self, client: &Client) -> NetResult<TimeEntry> {
+    pub async fn duplicate(self, client: &Client) -> NetResult<Self> {
         Self::create_running(
             self.description,
             self.workspace_id,

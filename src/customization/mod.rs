@@ -43,7 +43,7 @@ pub struct Customization {
 
 impl From<Customization> for Preferences {
     fn from(value: Customization) -> Self {
-        Preferences {
+        Self {
             date_format: value.date_format.to_toggl(),
             time_format: value.time_format.to_toggl(),
             beginning_of_week: value.week_start_day.to_toggl(),
@@ -71,7 +71,7 @@ impl Customization {
         if let Some(date) = datetime {
             date.format(&self.datetime_format()).to_string()
         } else {
-            "".to_string()
+            String::new()
         }
     }
 
@@ -88,7 +88,7 @@ impl Customization {
         Ok(Some(Local.from_local_datetime(&naive).unwrap()))
     }
 
-    pub fn use_24h(&self) -> bool {
+    pub const fn use_24h(&self) -> bool {
         match self.time_format {
             TimeFormat::H12 => false,
             TimeFormat::H24 => true,

@@ -147,7 +147,7 @@ impl State {
     pub fn apply_change(&mut self, change: EntryEditInfo) -> Result<(), ()> {
         //! Apply an optimistic update.
         //!
-        //! If Ok(), the changes are unambiguous. Otherwise a full resync
+        //! If `Ok()`, the changes are unambiguous. Otherwise a full resync
         //! should be performed.
 
         match change.action {
@@ -189,13 +189,12 @@ impl State {
                             // Current running entry edited.
                             self.running_entry = Some(change.entry.clone());
                             return Ok(());
-                        } else {
-                            // Edited to make an entry running while another entry
-                            // was running. Back to the server - previous entry
-                            // was stopped when a new one was submitted, but we
-                            // don't know exact time.
-                            return Err(());
                         }
+                        // Edited to make an entry running while another entry
+                        // was running. Back to the server - previous entry
+                        // was stopped when a new one was submitted, but we
+                        // don't know exact time.
+                        return Err(());
                     }
                     (Some(old), Some(_)) if old.id == change.entry.id => {
                         // Entry stopped
@@ -207,7 +206,7 @@ impl State {
                     _ => {}
                 }
                 // In all other cases the edit should belong to some old entry
-                for e in self.time_entries.iter_mut() {
+                for e in &mut self.time_entries {
                     if e.id == change.entry.id {
                         change.entry.clone_into(e);
                         self.sort_entries();
@@ -385,7 +384,7 @@ mod test {
         };
         let me = ExtendedMe {
             projects: vec![],
-            workspaces: vec![ws.clone()],
+            workspaces: vec![ws],
             tags: vec![],
             time_entries: vec![e.clone()],
             beginning_of_week: 0,

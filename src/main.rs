@@ -1,3 +1,12 @@
+#![deny(
+    clippy::all,
+    // clippy::restriction,
+    clippy::pedantic,
+    clippy::nursery,
+    // clippy::cargo,
+)]
+#![allow(clippy::unreadable_literal)]
+
 use clap::{crate_version, Parser};
 use entities::Preferences;
 use iced::alignment::Horizontal;
@@ -169,13 +178,13 @@ impl App {
                 self.window_id = id;
                 if let Some(id) = id {
                     return window::change_icon(id, self.icon());
-                };
+                }
             }
             Message::DataFetched(state) => {
                 info!("Loaded initial data.");
                 if !matches!(&self.screen, Screen::Loaded(_)) {
-                    self.screen = Screen::Loaded(TemporaryState::default())
-                };
+                    self.screen = Screen::Loaded(TemporaryState::default());
+                }
                 self.state = self.state.clone().update_from_context(state);
                 let mut steps = vec![self.save_state(), self.update_icon()];
                 if !self.state.has_whole_last_week() {
@@ -214,7 +223,7 @@ impl App {
                 }
             }
             _ => {}
-        };
+        }
 
         match &mut self.screen {
             Screen::Loading => match message {
@@ -252,7 +261,7 @@ impl App {
             },
             Screen::Loaded(temp_state) => match message {
                 Message::TimeEntryProxy(TimeEntryMessage::Edit(e)) => {
-                    self.begin_edit(e.clone());
+                    self.begin_edit(e);
                 }
                 Message::TimeEntryProxy(TimeEntryMessage::Duplicate(e)) => {
                     let token = self.state.api_token.clone();
@@ -273,7 +282,7 @@ impl App {
 
                 Message::RunningEntryProxy(inner) => match inner {
                     RunningEntryMessage::StartEditing(entry) => {
-                        self.begin_edit(*entry.clone());
+                        self.begin_edit(*entry);
                     }
                     RunningEntryMessage::Error(err) => {
                         return Command::done(Message::Error(err));
@@ -392,7 +401,7 @@ impl App {
                 }
                 _ => {}
             },
-        };
+        }
         Command::none()
     }
 
@@ -404,7 +413,7 @@ impl App {
         let state = self.state.clone();
         Command::future(async move {
             match state.save_customization().await {
-                Ok(_) => Message::Discarded,
+                Ok(()) => Message::Discarded,
                 Err(e) => Message::Error(e.to_string()),
             }
         })
@@ -683,7 +692,7 @@ impl App {
         ])
     }
 
-    pub fn theme(&self) -> iced::Theme {
+    pub const fn theme(&self) -> iced::Theme {
         if self.state.customization.dark_mode {
             iced::Theme::Dracula
         } else {

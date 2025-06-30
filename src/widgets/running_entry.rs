@@ -109,7 +109,7 @@ impl RunningEntry {
                 })
             }
             SubmitOk(entry) => {
-                self.draft_description = "".to_string();
+                self.draft_description = String::new();
                 Command::done(SyncUpdate(EntryEditInfo {
                     action: EntryEditAction::Create,
                     entry: *entry,

@@ -56,7 +56,7 @@ impl CliArgs {
             Ok(UpdateStatus::Updated(version)) => {
                 println!("\ntoggl-track updated to {version}.");
             }
-        };
+        }
     }
 }
 

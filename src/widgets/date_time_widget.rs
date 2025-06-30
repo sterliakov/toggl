@@ -154,7 +154,7 @@ impl DateTimeWidget {
                 self.show_date_picker = false;
             }
             Finish => {}
-        };
+        }
         Command::none()
     }
 
