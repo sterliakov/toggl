@@ -176,10 +176,7 @@ impl DateTimeWidget {
     }
 
     pub fn get_value(&self) -> Result<Option<DateTime<Local>>, String> {
-        match &self.error {
-            Some(e) => Err(e.clone()),
-            None => Ok(self.dt),
-        }
+        self.error.as_ref().map_or(Ok(self.dt), |e| Err(e.clone()))
     }
 }
 

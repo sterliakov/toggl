@@ -6,6 +6,7 @@
     // clippy::cargo,
 )]
 #![allow(clippy::unreadable_literal)]
+#![allow(clippy::missing_errors_doc)]
 
 use clap::{crate_version, Parser};
 use entities::Preferences;
@@ -164,13 +165,12 @@ impl App {
     }
 
     fn update_icon(&self) -> Command<Message> {
-        if let Some(id) = self.window_id {
+        self.window_id.map_or_else(Command::none, |id| {
             window::change_icon(id, self.icon())
-        } else {
-            Command::none()
-        }
+        })
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::WindowIdReceived(id) => {
@@ -605,6 +605,8 @@ impl App {
         start: chrono::NaiveDate,
         tasks: impl Iterator<Item = &'a TimeEntry>,
     ) -> Element<'a, Message> {
+        const TOP_OFFSET: f32 = 8.0;
+
         let mut total = 0i64;
         let tasks_rendered: Vec<_> = tasks
             .inspect(|task| total += task.duration)
@@ -616,7 +618,6 @@ impl App {
                 ]
             })
             .collect();
-        const TOP_OFFSET: f32 = 8.0;
         let summary_container_style = |theme: &iced::Theme| {
             let color = theme.extended_palette().secondary.weak;
             container::Style {

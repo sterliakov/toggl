@@ -204,8 +204,7 @@ impl EditTimeEntry {
                     self.api_token.clone(),
                 ));
             }
-            Abort => {}
-            Completed(_) => {}
+            Abort | Completed(_) => {}
             Error(err) => {
                 self.error = Some(err);
             }

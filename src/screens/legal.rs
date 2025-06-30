@@ -5,7 +5,7 @@ use log::error;
 
 use crate::widgets::{close_button, icon_text, link};
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct LegalInfo;
 
 #[derive(Clone, Debug)]

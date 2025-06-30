@@ -55,10 +55,7 @@ impl From<Project> for MaybeProject {
 
 impl From<Option<Project>> for MaybeProject {
     fn from(value: Option<Project>) -> Self {
-        match value {
-            Some(p) => Self::Some(p),
-            None => Self::None,
-        }
+        value.map_or(Self::None, Self::Some)
     }
 }
 

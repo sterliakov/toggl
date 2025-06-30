@@ -96,23 +96,18 @@ impl State {
         if !self.has_more_entries {
             return true;
         }
-        match self.earliest_entry_time {
-            Some(time) => {
-                time < self.customization.to_start_of_week(Local::now())
-            }
-            None => true,
-        }
+        self.earliest_entry_time.is_none_or(|time| {
+            time < self.customization.to_start_of_week(Local::now())
+        })
     }
 
     pub fn add_entries(&mut self, entries: impl Iterator<Item = TimeEntry>) {
-        let mut earliest = None;
+        let mut earliest: Option<DateTime<Local>> = None;
         self.time_entries.extend(
             entries
                 .inspect(|e| {
-                    earliest = match earliest {
-                        None => Some(e.start),
-                        Some(v) => Some(v.min(e.start)),
-                    }
+                    earliest = earliest
+                        .map_or(Some(e.start), |v| Some(v.min(e.start)));
                 })
                 .filter(|e| Some(e.workspace_id) == self.default_workspace),
         );
@@ -133,10 +128,9 @@ impl State {
                 }
             })
             .sum();
-        match &self.running_entry {
-            None => old,
-            Some(e) => old + e.get_duration(),
-        }
+        self.running_entry
+            .as_ref()
+            .map_or(old, |e| old + e.get_duration())
     }
 
     fn sort_entries(&mut self) {
@@ -223,13 +217,12 @@ impl State {
 
 impl State {
     fn path() -> std::path::PathBuf {
-        let mut path = if let Some(project_dirs) =
+        let mut path =
             directories_next::ProjectDirs::from("rs", "Iced", "toggl-tracker")
-        {
-            project_dirs.data_dir().into()
-        } else {
-            std::env::current_dir().unwrap_or_default()
-        };
+                .map_or_else(
+                    || std::env::current_dir().unwrap_or_default(),
+                    |project_dirs| project_dirs.data_dir().into(),
+                );
 
         path.push("toggl.json");
         path
@@ -486,23 +479,22 @@ mod test_updates {
         duration: Option<i64>,
         id: u64,
     ) -> TimeEntry {
-        if let Some(duration) = duration {
-            TimeEntry {
-                start: now - TimeDelta::minutes(start),
-                stop: Some(now - TimeDelta::minutes(start - duration)),
-                duration: duration * 60,
-                id,
-                ..TimeEntry::default()
-            }
-        } else {
-            TimeEntry {
+        duration.map_or_else(
+            || TimeEntry {
                 start: now - TimeDelta::minutes(start),
                 stop: None,
                 duration: -1,
                 id,
                 ..TimeEntry::default()
-            }
-        }
+            },
+            |duration| TimeEntry {
+                start: now - TimeDelta::minutes(start),
+                stop: Some(now - TimeDelta::minutes(start - duration)),
+                duration: duration * 60,
+                id,
+                ..TimeEntry::default()
+            },
+        )
     }
 
     #[test]

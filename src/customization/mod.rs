@@ -68,11 +68,9 @@ impl Customization {
         &self,
         datetime: &Option<DateTime<Local>>,
     ) -> String {
-        if let Some(date) = datetime {
+        datetime.as_ref().map_or_else(String::new, |date| {
             date.format(&self.datetime_format()).to_string()
-        } else {
-            String::new()
-        }
+        })
     }
 
     pub fn parse_datetime(
