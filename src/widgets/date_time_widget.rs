@@ -46,7 +46,7 @@ impl CustomWidget<DateTimeEditMessage> for DateTimeWidget {
                 .on_input(DateTimeEditMessage::EditText)
                 .on_submit(DateTimeEditMessage::Finish),
             self.date_picker(ref_time),
-            self.time_picker(ref_time, &state.customization),
+            self.time_picker(ref_time, state.customization()),
         ]]
         .push_maybe(self.error.clone().map(|e| text(e).style(text::danger)))
         .into()
@@ -58,7 +58,7 @@ impl CustomWidget<DateTimeEditMessage> for DateTimeWidget {
         state: &State,
     ) -> Command<DateTimeEditMessage> {
         use DateTimeEditMessage::*;
-        let customization = &state.customization;
+        let customization = state.customization();
 
         match message {
             EditText(text) => {

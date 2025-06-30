@@ -18,7 +18,7 @@ pub enum LoginScreenMessage {
     EmailEdited(String),
     PasswordEdited(String),
     Submit,
-    Completed(String),
+    Completed { email: String, api_token: String },
     Error(String),
 }
 
@@ -58,7 +58,7 @@ impl CustomWidget<LoginScreenMessage> for LoginScreen {
             LoginScreenMessage::Submit => {
                 return Command::future(self.clone().submit());
             }
-            LoginScreenMessage::Completed(_) => {}
+            LoginScreenMessage::Completed { .. } => {}
         }
         Command::none()
     }
@@ -81,7 +81,10 @@ impl LoginScreen {
             );
         }
         match Self::call_submit(&self.email, &self.password).await {
-            Ok(token) => LoginScreenMessage::Completed(token),
+            Ok(token) => LoginScreenMessage::Completed {
+                email: self.email.clone(),
+                api_token: token,
+            },
             Err(e) => LoginScreenMessage::Error(e.to_string()),
         }
     }
