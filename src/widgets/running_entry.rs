@@ -3,6 +3,7 @@ use iced::widget::{button, column, container, row, text, text_input};
 use iced::{Color, Length, Task as Command};
 use log::{info, warn};
 
+use super::CustomWidget;
 use crate::state::{EntryEditAction, EntryEditInfo, State};
 use crate::time_entry::TimeEntry;
 use crate::utils::Client;
@@ -26,11 +27,8 @@ pub enum RunningEntryMessage {
     SyncUpdate(EntryEditInfo),
 }
 
-impl RunningEntry {
-    pub fn view(
-        &self,
-        state: &State,
-    ) -> iced::Element<'_, RunningEntryMessage> {
+impl CustomWidget<RunningEntryMessage> for RunningEntry {
+    fn view(&self, state: &State) -> iced::Element<'_, RunningEntryMessage> {
         let Some(entry) = state.running_entry.clone() else {
             return self.new_entry_input();
         };
@@ -78,7 +76,7 @@ impl RunningEntry {
         .into()
     }
 
-    pub fn update(
+    fn update(
         &mut self,
         message: RunningEntryMessage,
         state: &State,
@@ -141,7 +139,9 @@ impl RunningEntry {
             _ => Command::none(),
         }
     }
+}
 
+impl RunningEntry {
     fn new_entry_input(&self) -> iced::Element<'_, RunningEntryMessage> {
         row![
             text_input("Create new entry...", &self.draft_description)

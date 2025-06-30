@@ -1,9 +1,10 @@
-use iced::advanced::text::highlighter::PlainText;
-use iced::keyboard;
 use iced::keyboard::key::Named as NamedKey;
 use iced::widget::text_editor;
-use iced::widget::text_editor::{Action, Binding, Content, Motion, TextEditor};
+use iced::widget::text_editor::{Action, Binding, Content, Motion};
+use iced::{keyboard, Task as Command};
 
+use super::CustomWidget;
+use crate::state::State;
 use crate::utils::ExactModifiers;
 
 #[derive(Debug)]
@@ -41,8 +42,8 @@ pub enum TextEditorMessage {
     Undo,
 }
 
-impl TextEditorExt {
-    pub fn view(&self) -> TextEditor<'_, PlainText, TextEditorMessage> {
+impl CustomWidget<TextEditorMessage> for TextEditorExt {
+    fn view(&self, _state: &State) -> iced::Element<'_, TextEditorMessage> {
         text_editor(&self.content)
             .key_binding(|press| {
                 if !matches!(press.status, text_editor::Status::Focused) {
@@ -91,9 +92,14 @@ impl TextEditorExt {
                 }
             })
             .on_action(TextEditorMessage::Original)
+            .into()
     }
 
-    pub fn update(&mut self, action: TextEditorMessage) {
+    fn update(
+        &mut self,
+        action: TextEditorMessage,
+        _state: &State,
+    ) -> Command<TextEditorMessage> {
         use TextEditorMessage::*;
 
         match action {
@@ -101,7 +107,7 @@ impl TextEditorExt {
                 let mut step_to_undo: EditorHistory;
                 loop {
                     let Some(entry) = self.history.pop() else {
-                        return;
+                        return Command::none();
                     };
                     if entry.action.is_edit() {
                         step_to_undo = entry;
@@ -148,8 +154,11 @@ impl TextEditorExt {
                 self.content.perform(action);
             }
         }
+        Command::none()
     }
+}
 
+impl TextEditorExt {
     pub fn get_value(&self) -> String {
         self.content.text()
     }

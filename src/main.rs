@@ -49,7 +49,7 @@ use crate::updater::UpdateStep;
 use crate::utils::{duration_to_hms, Client, ExactModifiers};
 use crate::widgets::{
     menu_select_item, menu_text, menu_text_disabled, top_level_menu_text,
-    RunningEntry, RunningEntryMessage,
+    CustomWidget, RunningEntry, RunningEntryMessage,
 };
 
 pub fn main() -> iced::Result {
@@ -255,7 +255,9 @@ impl App {
                     ));
                 }
                 Message::LoginProxy(msg) => {
-                    return screen.update(msg).map(Message::LoginProxy)
+                    return screen
+                        .update(msg, &self.state)
+                        .map(Message::LoginProxy)
                 }
                 _ => {}
             },
@@ -379,13 +381,15 @@ impl App {
                 }
                 Message::EditTimeEntryProxy(msg) => {
                     return screen
-                        .update(msg, &self.state.customization)
+                        .update(msg, &self.state)
                         .map(Message::EditTimeEntryProxy)
                 }
                 Message::KeyPressed(key, m) => {
                     return screen
                         .handle_key(key, m)
-                        .map(Message::EditTimeEntryProxy)
+                        .map_or_else(Command::none, |t| {
+                            t.map(Message::EditTimeEntryProxy)
+                        })
                 }
                 _ => {}
             },
@@ -394,10 +398,16 @@ impl App {
                     return self.load_entries();
                 }
                 Message::LegalProxy(msg) => {
-                    return screen.update(msg).map(Message::LegalProxy)
+                    return screen
+                        .update(msg, &self.state)
+                        .map(Message::LegalProxy)
                 }
                 Message::KeyPressed(key, m) => {
-                    return screen.handle_key(key, m).map(Message::LegalProxy)
+                    return screen
+                        .handle_key(key, m)
+                        .map_or_else(Command::none, |t| {
+                            t.map(Message::LegalProxy)
+                        })
                 }
                 _ => {}
             },
@@ -430,7 +440,9 @@ impl App {
     pub fn view(&self) -> Element<'_, Message> {
         match &self.screen {
             Screen::Loading => loading_message(&self.error),
-            Screen::Unauthed(screen) => screen.view().map(Message::LoginProxy),
+            Screen::Unauthed(screen) => {
+                screen.view(&self.state).map(Message::LoginProxy)
+            }
             Screen::Loaded(temp_state) => {
                 let content = column(
                     self.state
@@ -482,10 +494,12 @@ impl App {
                 .center_x(Fill)
                 .into()
             }
-            Screen::EditEntry(screen) => screen
-                .view(&self.state.customization)
-                .map(Message::EditTimeEntryProxy),
-            Screen::Legal(screen) => screen.view().map(Message::LegalProxy),
+            Screen::EditEntry(screen) => {
+                screen.view(&self.state).map(Message::EditTimeEntryProxy)
+            }
+            Screen::Legal(screen) => {
+                screen.view(&self.state).map(Message::LegalProxy)
+            }
         }
     }
 
@@ -671,7 +685,7 @@ impl App {
         }
     }
 
-    pub fn subscription(&self) -> iced::Subscription<Message> {
+    pub fn subscription(_self: &Self) -> iced::Subscription<Message> {
         use iced::keyboard::{on_key_press, Key};
         iced::Subscription::batch(vec![
             iced::time::every(std::time::Duration::from_secs(1))

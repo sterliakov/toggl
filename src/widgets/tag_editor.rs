@@ -4,9 +4,11 @@ use iced::alignment::Vertical;
 use iced::widget::{
     button, container, row, scrollable, Column, Row, Text, TextInput,
 };
-use iced::{Border, Length};
+use iced::{Border, Length, Task as Command};
 use iced_aw::{drop_down, DropDown};
 
+use super::CustomWidget;
+use crate::state::State;
 use crate::widgets::icon_button;
 
 #[derive(Clone, Debug)]
@@ -27,15 +29,23 @@ pub struct TagEditor {
     new_tag: String,
 }
 
-impl TagEditor {
-    pub fn new(options: Vec<String>, selected: Vec<String>) -> Self {
-        Self {
-            options,
-            selected,
-            ..Self::default()
-        }
+impl CustomWidget<TagEditorMessage> for TagEditor {
+    fn view(&self, _state: &State) -> iced::Element<'_, TagEditorMessage> {
+        Row::new()
+            .push(Text::new("Tags:"))
+            .extend(self.selected.iter().map(Self::tag_item))
+            .push(self.picker())
+            .spacing(6)
+            .align_y(Vertical::Center)
+            .wrap()
+            .into()
     }
-    pub fn update(&mut self, message: TagEditorMessage) {
+
+    fn update(
+        &mut self,
+        message: TagEditorMessage,
+        _state: &State,
+    ) -> Command<TagEditorMessage> {
         use TagEditorMessage::*;
         match message {
             Select(choice) => {
@@ -60,17 +70,17 @@ impl TagEditor {
                 self.new_tag = String::new();
             }
         }
+        Command::none()
     }
+}
 
-    pub fn view(&self) -> iced::Element<'_, TagEditorMessage> {
-        Row::new()
-            .push(Text::new("Tags:"))
-            .extend(self.selected.iter().map(Self::tag_item))
-            .push(self.picker())
-            .spacing(6)
-            .align_y(Vertical::Center)
-            .wrap()
-            .into()
+impl TagEditor {
+    pub fn new(options: Vec<String>, selected: Vec<String>) -> Self {
+        Self {
+            options,
+            selected,
+            ..Self::default()
+        }
     }
 
     pub fn get_value(&self) -> Vec<String> {

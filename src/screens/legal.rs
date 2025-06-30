@@ -3,7 +3,8 @@ use iced::widget::{button, column, container, row, scrollable, text, Column};
 use iced::{keyboard, Element, Fill, Task as Command};
 use log::error;
 
-use crate::widgets::{close_button, icon_text, link};
+use crate::state::State;
+use crate::widgets::{close_button, icon_text, link, CustomWidget};
 
 #[derive(Clone, Copy, Debug)]
 pub struct LegalInfo;
@@ -14,12 +15,8 @@ pub enum LegalInfoMessage {
     OpenLink(String),
 }
 
-impl LegalInfo {
-    pub const fn new() -> Self {
-        Self {}
-    }
-
-    pub fn view(&self) -> Element<'_, LegalInfoMessage> {
+impl CustomWidget<LegalInfoMessage> for LegalInfo {
+    fn view(&self, _state: &State) -> iced::Element<'_, LegalInfoMessage> {
         let content = column![
             close_button(LegalInfoMessage::Close),
             column![
@@ -39,9 +36,10 @@ impl LegalInfo {
         scrollable(container(content).center_x(Fill).padding(10)).into()
     }
 
-    pub fn update(
+    fn update(
         &mut self,
         message: LegalInfoMessage,
+        _state: &State,
     ) -> Command<LegalInfoMessage> {
         use LegalInfoMessage::*;
         if let OpenLink(ref url) = message {
@@ -53,16 +51,22 @@ impl LegalInfo {
         Command::none()
     }
 
-    pub fn handle_key(
+    fn handle_key(
         &mut self,
         key: NamedKey,
         modifiers: keyboard::Modifiers,
-    ) -> Command<LegalInfoMessage> {
+    ) -> Option<Command<LegalInfoMessage>> {
         if matches!(key, NamedKey::Escape) && modifiers.is_empty() {
-            Command::done(LegalInfoMessage::Close)
+            Some(Command::done(LegalInfoMessage::Close))
         } else {
-            Command::none()
+            None
         }
+    }
+}
+
+impl LegalInfo {
+    pub const fn new() -> Self {
+        Self {}
     }
 }
 

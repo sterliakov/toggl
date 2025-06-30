@@ -2,7 +2,9 @@ use iced::widget::{button, column, container, scrollable, text, text_input};
 use iced::{Element, Fill, Task as Command};
 use serde::{Deserialize, Serialize};
 
+use crate::state::State;
 use crate::utils::{Client, NetResult};
+use crate::widgets::CustomWidget;
 
 #[derive(Clone, Debug, Default)]
 pub struct LoginScreen {
@@ -20,12 +22,8 @@ pub enum LoginScreenMessage {
     Error(String),
 }
 
-impl LoginScreen {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn view(&self) -> Element<'_, LoginScreenMessage> {
+impl CustomWidget<LoginScreenMessage> for LoginScreen {
+    fn view(&self, _state: &State) -> Element<'_, LoginScreenMessage> {
         let content = column![
             text_input("Email", &self.email)
                 .id("email-input")
@@ -46,9 +44,10 @@ impl LoginScreen {
         scrollable(container(content).center_x(Fill).padding(40)).into()
     }
 
-    pub fn update(
+    fn update(
         &mut self,
         message: LoginScreenMessage,
+        _state: &State,
     ) -> Command<LoginScreenMessage> {
         match message {
             LoginScreenMessage::EmailEdited(email) => self.email = email,
@@ -62,6 +61,12 @@ impl LoginScreen {
             LoginScreenMessage::Completed(_) => {}
         }
         Command::none()
+    }
+}
+
+impl LoginScreen {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     async fn submit(self) -> LoginScreenMessage {

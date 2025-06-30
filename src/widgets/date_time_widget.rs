@@ -1,15 +1,16 @@
 use chrono::{DateTime, Datelike, Local};
 use iced::keyboard::key::Named as NamedKey;
 use iced::widget::{button, column, row, text, text_input};
-use iced::{Element, Task as Command};
+use iced::{keyboard, Element, Task as Command};
 use iced_aw::date_picker::Date;
 use iced_aw::time_picker::Time;
 use iced_aw::{DatePicker, TimePicker};
 use iced_fonts::Bootstrap;
 use log::warn;
 
-use super::icon_button;
+use super::{icon_button, CustomWidget};
 use crate::customization::Customization;
+use crate::state::State;
 
 #[derive(Clone, Debug)]
 pub enum DateTimeEditMessage {
@@ -36,28 +37,8 @@ pub struct DateTimeWidget {
     error: Option<String>,
 }
 
-impl DateTimeWidget {
-    pub fn new(
-        start: Option<DateTime<Local>>,
-        input_label: impl ToString,
-        input_id: impl ToString,
-        customization: &Customization,
-    ) -> Self {
-        Self {
-            input_label: input_label.to_string(),
-            input_id: input_id.to_string(),
-            dt: start,
-            full_text: customization.format_datetime(&start),
-            show_time_picker: false,
-            show_date_picker: false,
-            error: None,
-        }
-    }
-
-    pub fn view(
-        &self,
-        customization: &Customization,
-    ) -> Element<'_, DateTimeEditMessage> {
+impl CustomWidget<DateTimeEditMessage> for DateTimeWidget {
+    fn view(&self, state: &State) -> Element<'_, DateTimeEditMessage> {
         let ref_time = self.dt.unwrap_or_else(Local::now);
         column![row![
             text_input(&self.input_label, &self.full_text)
@@ -65,58 +46,19 @@ impl DateTimeWidget {
                 .on_input(DateTimeEditMessage::EditText)
                 .on_submit(DateTimeEditMessage::Finish),
             self.date_picker(ref_time),
-            self.time_picker(ref_time, customization),
+            self.time_picker(ref_time, &state.customization),
         ]]
         .push_maybe(self.error.clone().map(|e| text(e).style(text::danger)))
         .into()
     }
 
-    fn time_picker(
-        &self,
-        ref_time: DateTime<Local>,
-        customization: &Customization,
-    ) -> TimePicker<'_, DateTimeEditMessage, iced::Theme> {
-        let but = icon_button(Bootstrap::ClockFill)
-            .on_press(DateTimeEditMessage::OpenTimePicker)
-            .width(24)
-            .style(button::secondary);
-        let mut timepicker = TimePicker::new(
-            self.show_time_picker,
-            ref_time.time(),
-            but,
-            DateTimeEditMessage::CloseTimePicker,
-            DateTimeEditMessage::SubmitTime,
-        )
-        .show_seconds();
-        if customization.use_24h() {
-            timepicker = timepicker.use_24h();
-        }
-        timepicker
-    }
-
-    fn date_picker(
-        &self,
-        ref_time: DateTime<Local>,
-    ) -> DatePicker<'_, DateTimeEditMessage, iced::Theme> {
-        let but = icon_button(Bootstrap::CalendarDateFill)
-            .on_press(DateTimeEditMessage::OpenDatePicker)
-            .width(24)
-            .style(button::secondary);
-        DatePicker::new(
-            self.show_date_picker,
-            ref_time.date_naive(),
-            but,
-            DateTimeEditMessage::CloseDatePicker,
-            DateTimeEditMessage::SubmitDate,
-        )
-    }
-
-    pub fn update(
+    fn update(
         &mut self,
         message: DateTimeEditMessage,
-        customization: &Customization,
+        state: &State,
     ) -> Command<DateTimeEditMessage> {
         use DateTimeEditMessage::*;
+        let customization = &state.customization;
 
         match message {
             EditText(text) => {
@@ -158,9 +100,10 @@ impl DateTimeWidget {
         Command::none()
     }
 
-    pub fn handle_key(
+    fn handle_key(
         &mut self,
         key: NamedKey,
+        _modifiers: keyboard::Modifiers,
     ) -> Option<Command<DateTimeEditMessage>> {
         //! Returns None if key press is not intended for this component
         //! and command to run otherwise.
@@ -173,6 +116,65 @@ impl DateTimeWidget {
             }
             _ => None,
         }
+    }
+}
+
+impl DateTimeWidget {
+    pub fn new(
+        start: Option<DateTime<Local>>,
+        input_label: impl ToString,
+        input_id: impl ToString,
+        customization: &Customization,
+    ) -> Self {
+        Self {
+            input_label: input_label.to_string(),
+            input_id: input_id.to_string(),
+            dt: start,
+            full_text: customization.format_datetime(&start),
+            show_time_picker: false,
+            show_date_picker: false,
+            error: None,
+        }
+    }
+
+    fn time_picker(
+        &self,
+        ref_time: DateTime<Local>,
+        customization: &Customization,
+    ) -> TimePicker<'_, DateTimeEditMessage, iced::Theme> {
+        let but = icon_button(Bootstrap::ClockFill)
+            .on_press(DateTimeEditMessage::OpenTimePicker)
+            .width(24)
+            .style(button::secondary);
+        let mut timepicker = TimePicker::new(
+            self.show_time_picker,
+            ref_time.time(),
+            but,
+            DateTimeEditMessage::CloseTimePicker,
+            DateTimeEditMessage::SubmitTime,
+        )
+        .show_seconds();
+        if customization.use_24h() {
+            timepicker = timepicker.use_24h();
+        }
+        timepicker
+    }
+
+    fn date_picker(
+        &self,
+        ref_time: DateTime<Local>,
+    ) -> DatePicker<'_, DateTimeEditMessage, iced::Theme> {
+        let but = icon_button(Bootstrap::CalendarDateFill)
+            .on_press(DateTimeEditMessage::OpenDatePicker)
+            .width(24)
+            .style(button::secondary);
+        DatePicker::new(
+            self.show_date_picker,
+            ref_time.date_naive(),
+            but,
+            DateTimeEditMessage::CloseDatePicker,
+            DateTimeEditMessage::SubmitDate,
+        )
     }
 
     pub fn get_value(&self) -> Result<Option<DateTime<Local>>, String> {

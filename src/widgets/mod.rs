@@ -3,12 +3,14 @@ use iced::widget::{button, text, Container};
 use iced_fonts::bootstrap::icon_to_string;
 use iced_fonts::{Bootstrap, BOOTSTRAP_FONT};
 
+mod base;
 mod date_time_widget;
 mod menu_helpers;
 mod running_entry;
 mod tag_editor;
 mod text_editor_ext;
 
+pub use base::CustomWidget;
 pub use date_time_widget::{DateTimeEditMessage, DateTimeWidget};
 pub use menu_helpers::{
     default_button_text, menu_button, menu_select_item, menu_text,
