@@ -1,6 +1,7 @@
 use chrono::{DateTime, Duration, Local};
 use log::error;
 use serde::{Deserialize, Serialize};
+use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
 use crate::customization::Customization;
 use crate::entities::{
@@ -222,12 +223,10 @@ impl State {
     }
 
     pub async fn load() -> Result<Box<Self>, StatePersistenceError> {
-        use async_std::prelude::*;
-
         let mut contents = String::new();
 
         let mut file =
-            async_std::fs::File::open(Self::path()).await.map_err(|e| {
+            tokio::fs::File::open(Self::path()).await.map_err(|e| {
                 error!("Failed to open a state file: {e}");
                 StatePersistenceError::FileSystem
             })?;
@@ -245,7 +244,6 @@ impl State {
 
     pub async fn save(self) -> Result<(), StatePersistenceError> {
         // This takes ownership for easier async saving
-        use async_std::prelude::*;
 
         let json = serde_json::to_string_pretty(&self).map_err(|e| {
             error!("Failed to serialize state: {e}");
@@ -255,7 +253,7 @@ impl State {
         let path = Self::path();
 
         if let Some(dir) = path.parent() {
-            async_std::fs::create_dir_all(dir).await.map_err(|e| {
+            tokio::fs::create_dir_all(dir).await.map_err(|e| {
                 error!("Failed to create parent directories: {e}");
                 StatePersistenceError::FileSystem
             })?;
@@ -263,7 +261,7 @@ impl State {
 
         {
             let mut file =
-                async_std::fs::File::create(path).await.map_err(|e| {
+                tokio::fs::File::create(path).await.map_err(|e| {
                     error!("Failed to create a state file: {e}");
                     StatePersistenceError::FileSystem
                 })?;
@@ -279,7 +277,7 @@ impl State {
 
     pub async fn delete_file(self) -> Result<(), StatePersistenceError> {
         let path = Self::path();
-        async_std::fs::remove_file(path).await.map_err(|e| {
+        tokio::fs::remove_file(path).await.map_err(|e| {
             error!("Failed to remove state file: {e}");
             StatePersistenceError::FileSystem
         })
@@ -438,7 +436,7 @@ mod test {
         assert_eq!(state.default_workspace, Some(ws1.id));
     }
 
-    #[async_std::test]
+    #[tokio::test]
     async fn test_crud() {
         let client = test_client();
         let me = ExtendedMe::load(&client).await.expect("get me");
@@ -454,7 +452,7 @@ mod test {
             .expect("save customization");
 
         // Respect API limits
-        async_std::task::sleep(std::time::Duration::from_secs(1)).await;
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         let me = ExtendedMe::load(&client).await.expect("get me");
         let state = State::default().update_from_context(me);
         assert_eq!(state.customization.week_start_day, new_day);
