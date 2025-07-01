@@ -25,12 +25,13 @@ impl Preferences {
     }
     pub async fn load(client: &Client) -> NetResult<Self> {
         info!("Fetching preferences...");
-        let mut rsp = client
+        client
             .get(format!("{}/api/v9/me/preferences", Client::BASE_URL))
             .send()
-            .await?;
-        Client::check_status(&mut rsp).await?;
-        rsp.body_json().await
+            .await?
+            .error_for_status()?
+            .json()
+            .await
     }
 
     pub async fn save(
@@ -47,13 +48,13 @@ impl Preferences {
 
     async fn save_base(&self, client: &Client) -> NetResult<()> {
         info!("Saving main preferences...");
-        let mut rsp = client
+        client
             .post(format!("{}/api/v9/me/preferences", Client::BASE_URL))
-            .body_json(&self)
-            .expect("serialize Preferences")
+            .json(&self)
             .send()
-            .await?;
-        Client::check_status(&mut rsp).await
+            .await?
+            .error_for_status()?;
+        Ok(())
     }
 
     async fn save_profile(
@@ -62,16 +63,16 @@ impl Preferences {
         client: &Client,
     ) -> NetResult<()> {
         info!("Saving beginning of week...");
-        let mut rsp = client
+        client
             .put(format!("{}/api/v9/me", Client::BASE_URL))
-            .body_json(&ProfilePart {
+            .json(&ProfilePart {
                 beginning_of_week: self.beginning_of_week,
                 default_workspace_id,
             })
-            .expect("serialize ProfilePart")
             .send()
-            .await?;
-        Client::check_status(&mut rsp).await
+            .await?
+            .error_for_status()?;
+        Ok(())
     }
 }
 

@@ -34,25 +34,28 @@ impl InstallationMethod {
 }
 
 pub async fn update(confirm: bool) -> Result<UpdateStatus, UpdateError> {
+    tokio::task::spawn_blocking(move || update_sync(confirm))
+        .await
+        .expect("Should spawn")
+}
+
+pub fn update_sync(confirm: bool) -> Result<UpdateStatus, UpdateError> {
     let isatty = atty::is(atty::Stream::Stdout);
-    async_std::task::spawn_blocking(move || {
-        self_update::backends::github::Update::configure()
-            .repo_owner("sterliakov")
-            .repo_name("toggl")
-            .bin_name("toggl-tracker")
-            .show_download_progress(isatty)
-            .no_confirm(!confirm || !isatty)
-            .identifier(archive_ident()) // Prevent inclusion of .sha256 files
-            .current_version(cargo_crate_version!())
-            .build()?
-            .update()
-    })
-    .await
+    self_update::backends::github::Update::configure()
+        .repo_owner("sterliakov")
+        .repo_name("toggl")
+        .bin_name("toggl-tracker")
+        .show_download_progress(isatty)
+        .no_confirm(!confirm || !isatty)
+        .identifier(archive_ident()) // Prevent inclusion of .sha256 files
+        .current_version(cargo_crate_version!())
+        .build()?
+        .update()
 }
 
 pub async fn has_updates() -> Result<bool, UpdateError> {
     let current = cargo_crate_version!();
-    async_std::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         let releases = self_update::backends::github::ReleaseList::configure()
             .repo_owner("sterliakov")
             .repo_name("toggl")
@@ -64,6 +67,7 @@ pub async fn has_updates() -> Result<bool, UpdateError> {
         }))
     })
     .await
+    .expect("Should spawn")
 }
 
 #[cfg(unix)]
