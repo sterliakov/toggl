@@ -1,6 +1,6 @@
 use chrono::{
-    DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime,
-    TimeDelta, TimeZone, Weekday,
+    DateTime, Datelike as _, Duration, Local, NaiveDate, NaiveDateTime,
+    NaiveTime, TimeDelta, TimeZone as _, Weekday,
 };
 use iced::keyboard::Modifiers;
 

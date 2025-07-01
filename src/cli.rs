@@ -1,4 +1,7 @@
-use std::io::{self, Write};
+#![allow(clippy::print_stderr)]
+#![allow(clippy::print_stdout)]
+
+use std::io::{self, Write as _};
 
 use clap::{Parser, Subcommand};
 

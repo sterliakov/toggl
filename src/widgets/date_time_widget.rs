@@ -1,4 +1,4 @@
-use chrono::{DateTime, Datelike, Local};
+use chrono::{DateTime, Datelike as _, Local};
 use iced::keyboard::key::Named as NamedKey;
 use iced::widget::{button, column, row, text, text_input};
 use iced::{keyboard, Element, Task as Command};
@@ -67,7 +67,7 @@ impl CustomWidget<DateTimeEditMessage> for DateTimeWidget {
                     self.error = None;
                 } else {
                     self.dt = None;
-                    self.error = Some("Invalid date".to_string());
+                    self.error = Some("Invalid date".to_owned());
                 }
                 self.full_text = text;
             }
@@ -129,8 +129,8 @@ impl DateTimeWidget {
         customization: &Customization,
     ) -> Self {
         Self {
-            input_label: input_label.to_string(),
-            input_id: input_id.to_string(),
+            input_label: input_label.to_owned(),
+            input_id: input_id.to_owned(),
             dt: start,
             full_text: customization.format_datetime(start.as_ref()),
             show_time_picker: false,
@@ -198,6 +198,7 @@ fn with_time(
         })
 }
 
+#[expect(clippy::return_and_then)]
 fn with_date(
     dt: Option<DateTime<Local>>,
     date: Date,

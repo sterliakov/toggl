@@ -120,13 +120,8 @@ impl State {
         let old = self
             .time_entries
             .iter()
-            .filter_map(|e| {
-                if e.start >= mon {
-                    Some(e.get_duration())
-                } else {
-                    None
-                }
-            })
+            .filter(|&e| (e.start >= mon))
+            .map(super::time_entry::TimeEntry::get_duration)
             .sum();
         self.running_entry
             .as_ref()
@@ -170,6 +165,7 @@ impl State {
                 self.time_entries.retain(|e| e.id != change.entry.id);
                 Ok(())
             }
+            #[expect(clippy::pattern_type_mismatch)]
             EntryEditAction::Update => {
                 match (&self.running_entry, change.entry.stop) {
                     (None, None) => {
@@ -217,15 +213,12 @@ impl State {
 
 impl State {
     fn path() -> std::path::PathBuf {
-        let mut path =
-            directories_next::ProjectDirs::from("rs", "Iced", "toggl-tracker")
-                .map_or_else(
-                    || std::env::current_dir().unwrap_or_default(),
-                    |project_dirs| project_dirs.data_dir().into(),
-                );
-
-        path.push("toggl.json");
-        path
+        directories_next::ProjectDirs::from("rs", "Iced", "toggl-tracker")
+            .map_or_else(
+                || std::env::current_dir().unwrap_or_default(),
+                |project_dirs| project_dirs.data_dir().into(),
+            )
+            .join("toggl.json")
     }
 
     pub async fn load() -> Result<Box<Self>, StatePersistenceError> {
@@ -279,7 +272,7 @@ impl State {
                 error!("Failed to write state to the file: {e}");
                 StatePersistenceError::FileSystem
             })?;
-        }
+        };
 
         Ok(())
     }
@@ -303,6 +296,8 @@ impl State {
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::shadow_unrelated)]
+
     use chrono::{Duration, Local, TimeDelta};
 
     use super::State;

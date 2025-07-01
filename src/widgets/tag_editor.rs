@@ -146,7 +146,7 @@ impl TagEditor {
             None
         } else {
             Some(
-                button(Text::new(choice.to_string()))
+                button(Text::new(choice.to_owned()))
                     .style(button::secondary)
                     .on_press(TagEditorMessage::Select(choice.clone()))
                     .width(Length::Fill)
@@ -179,7 +179,7 @@ impl TagEditor {
                         top: -4.0,
                         ..iced::Padding::default()
                     })
-                    .on_press(TagEditorMessage::Deselect(name.to_string()))
+                    .on_press(TagEditorMessage::Deselect(name.to_owned()))
             ]
             .spacing(2)
             .align_y(Vertical::Center),

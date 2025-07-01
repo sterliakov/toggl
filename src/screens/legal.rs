@@ -21,7 +21,7 @@ impl CustomWidget<LegalInfoMessage> for LegalInfo {
             close_button(LegalInfoMessage::Close),
             column![
                 text("This client is MIT-licensed, you can find the full text of the license by following the link below:"),
-                link("License", "https://github.com/sterliakov/toggl/blob/master/LICENSE".to_string(), LegalInfoMessage::OpenLink),
+                link("License", "https://github.com/sterliakov/toggl/blob/master/LICENSE".to_owned(), LegalInfoMessage::OpenLink),
             ].spacing(4),
             column![
                 text("We do not share any information with third parties other than Toggl itself. By using this application you agree to comply with Toggl legal requirements:"),
@@ -42,7 +42,7 @@ impl CustomWidget<LegalInfoMessage> for LegalInfo {
         _state: &State,
     ) -> Command<LegalInfoMessage> {
         use LegalInfoMessage::*;
-        if let OpenLink(ref url) = message {
+        if let OpenLink(url) = &message {
             // TODO: open_browser would be better but refuses to work with FF on my PC
             if let Err(e) = opener::open(url) {
                 error!("Failed to open browser: {e:?}");
@@ -56,11 +56,8 @@ impl CustomWidget<LegalInfoMessage> for LegalInfo {
         key: NamedKey,
         modifiers: keyboard::Modifiers,
     ) -> Option<Command<LegalInfoMessage>> {
-        if matches!(key, NamedKey::Escape) && modifiers.is_empty() {
-            Some(Command::done(LegalInfoMessage::Close))
-        } else {
-            None
-        }
+        (matches!(key, NamedKey::Escape) && modifiers.is_empty())
+            .then(|| Command::done(LegalInfoMessage::Close))
     }
 }
 
@@ -85,7 +82,7 @@ fn bullet_link<'a>(
     name: &'a str,
     url: &'a str,
 ) -> button::Button<'a, LegalInfoMessage> {
-    link(name, url.to_string(), LegalInfoMessage::OpenLink).padding(
+    link(name, url.to_owned(), LegalInfoMessage::OpenLink).padding(
         iced::Padding {
             top: 2.0,
             ..iced::Padding::default()

@@ -88,7 +88,7 @@ impl MaybeProject {
                 },
             )
         } else {
-            badge(text("No project".to_string()).size(10).line_height(1.0))
+            badge(text("No project".to_owned()).size(10).line_height(1.0))
                 .style(iced_aw::style::badge::light)
         }
         .height(22)

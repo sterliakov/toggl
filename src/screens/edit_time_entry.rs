@@ -7,7 +7,7 @@ use iced::{keyboard, Element, Fill, Length, Task as Command};
 use crate::entities::MaybeProject;
 use crate::state::{EntryEditAction, EntryEditInfo, State};
 use crate::time_entry::TimeEntry;
-use crate::utils::{Client, ExactModifiers};
+use crate::utils::{Client, ExactModifiers as _};
 use crate::widgets::{
     close_button, CustomWidget, DateTimeEditMessage, DateTimeWidget, TagEditor,
     TagEditorMessage, TextEditorExt, TextEditorMessage,
@@ -42,7 +42,7 @@ pub enum EditTimeEntryMessage {
 
 impl CustomWidget<EditTimeEntryMessage> for EditTimeEntry {
     fn view(&self, state: &State) -> Element<'_, EditTimeEntryMessage> {
-        use std::borrow::Borrow;
+        use std::borrow::Borrow as _;
 
         let content = column![
             close_button(EditTimeEntryMessage::Abort),
@@ -129,7 +129,7 @@ impl CustomWidget<EditTimeEntryMessage> for EditTimeEntry {
                     Err(e) => return Command::done(Error(e)),
                     Ok(None) => {
                         return Command::done(Error(
-                            "Start cannot be blank".to_string(),
+                            "Start cannot be blank".to_owned(),
                         ))
                     }
                     Ok(Some(date)) => self.entry.start = date,
@@ -146,7 +146,7 @@ impl CustomWidget<EditTimeEntryMessage> for EditTimeEntry {
                     .map(|stop| (stop - self.entry.start).num_seconds());
                 if duration.unwrap_or(1) < 0 {
                     return Command::done(Error(
-                        "Start must come before end!".to_string(),
+                        "Start must come before end!".to_owned(),
                     ));
                 }
                 self.entry.duration = duration.unwrap_or(-1);

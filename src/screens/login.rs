@@ -72,12 +72,12 @@ impl LoginScreen {
     async fn submit(self) -> LoginScreenMessage {
         if self.email.is_empty() {
             return LoginScreenMessage::Error(
-                "Email must not be empty".to_string(),
+                "Email must not be empty".to_owned(),
             );
         }
         if self.password.is_empty() {
             return LoginScreenMessage::Error(
-                "Password must not be empty".to_string(),
+                "Password must not be empty".to_owned(),
             );
         }
         match Self::call_submit(&self.email, &self.password).await {

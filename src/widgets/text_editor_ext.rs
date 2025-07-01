@@ -5,7 +5,7 @@ use iced::{keyboard, Task as Command};
 
 use super::CustomWidget;
 use crate::state::State;
-use crate::utils::ExactModifiers;
+use crate::utils::ExactModifiers as _;
 
 #[derive(Debug)]
 pub struct TextEditorExt {
@@ -96,12 +96,12 @@ impl CustomWidget<TextEditorMessage> for TextEditorExt {
 
     fn update(
         &mut self,
-        action: TextEditorMessage,
+        message: TextEditorMessage,
         _state: &State,
     ) -> Command<TextEditorMessage> {
         use TextEditorMessage::*;
 
-        match action {
+        match message {
             Undo => {
                 let mut step_to_undo: EditorHistory;
                 loop {

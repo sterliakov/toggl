@@ -88,7 +88,7 @@ impl CustomWidget<RunningEntryMessage> for RunningEntry {
                 let description = self.draft_description.clone();
                 let Some(workspace_id) = state.default_workspace else {
                     return Command::done(Error(
-                        "No workspace selected!".to_string(),
+                        "No workspace selected!".to_owned(),
                     ));
                 };
                 let project_id = state.default_project;

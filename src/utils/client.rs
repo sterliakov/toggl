@@ -17,7 +17,7 @@ impl Client {
     pub fn from_email_password(email: &str, password: &str) -> Self {
         Self {
             client: surf::Client::new()
-                .with(AuthMiddleware(email.to_string(), password.to_string())),
+                .with(AuthMiddleware(email.to_owned(), password.to_owned())),
         }
     }
 
@@ -36,7 +36,7 @@ impl Client {
                 error!("Received an unsuccessful response (empty body).");
                 status.to_string()
             } else {
-                let response_text = std::str::from_utf8(binary)?.to_string();
+                let response_text = std::str::from_utf8(binary)?.to_owned();
                 error!("Received an unsuccessful response (non-empty body: '{response_text}').");
                 response_text
             };

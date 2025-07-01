@@ -1,4 +1,4 @@
-use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone};
+use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone as _};
 use iced::Task as Command;
 use iced_aw::menu;
 use serde::{Deserialize, Serialize};
@@ -118,7 +118,7 @@ pub enum CustomizationMessage {
 }
 
 impl Customization {
-    #[allow(clippy::needless_pass_by_value)]
+    #[expect(clippy::needless_pass_by_value)]
     pub fn update(
         &mut self,
         message: CustomizationMessage,

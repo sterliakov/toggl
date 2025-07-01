@@ -1,6 +1,5 @@
 #![deny(
     clippy::all,
-    // clippy::restriction,
     clippy::pedantic,
     clippy::nursery,
     // clippy::cargo,
@@ -8,10 +7,19 @@
 #![allow(clippy::unreadable_literal)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::unsafe_derive_deserialize)]
+#![deny(clippy::shadow_unrelated)]
+#![deny(clippy::str_to_string)]
+#![deny(clippy::unused_trait_names)]
+#![deny(clippy::print_stderr)]
+#![deny(clippy::print_stdout)]
+#![deny(clippy::filter_map_bool_then)]
+#![deny(clippy::if_then_some_else_none)]
+#![deny(clippy::return_and_then)]
+#![deny(clippy::ref_patterns)]
 
 use std::sync::LazyLock;
 
-use clap::{crate_version, Parser};
+use clap::{crate_version, Parser as _};
 use entities::Preferences;
 use iced::alignment::Horizontal;
 use iced::keyboard::key::Named as NamedKey;
@@ -20,7 +28,7 @@ use iced::widget::{
 };
 use iced::{keyboard, window, Center, Element, Fill, Padding, Task as Command};
 use iced_aw::menu;
-use itertools::Itertools;
+use itertools::Itertools as _;
 use log::{debug, error, info};
 use screens::{LegalInfo, LegalInfoMessage};
 use state::{EntryEditAction, EntryEditInfo};
@@ -48,10 +56,10 @@ use crate::screens::{
 use crate::state::{State, StatePersistenceError};
 use crate::time_entry::{TimeEntry, TimeEntryMessage};
 use crate::updater::UpdateStep;
-use crate::utils::{duration_to_hms, Client, ExactModifiers};
+use crate::utils::{duration_to_hms, Client, ExactModifiers as _};
 use crate::widgets::{
     menu_select_item, menu_text, menu_text_disabled, top_level_menu_text,
-    CustomWidget, RunningEntry, RunningEntryMessage,
+    CustomWidget as _, RunningEntry, RunningEntryMessage,
 };
 
 pub fn main() -> iced::Result {
@@ -89,7 +97,7 @@ struct App {
 }
 
 // There's one instance of this enum at a time, no need to box
-#[allow(clippy::large_enum_variant)]
+#[expect(clippy::large_enum_variant)]
 #[derive(Debug, Default)]
 enum Screen {
     #[default]
@@ -152,9 +160,9 @@ impl App {
 
     pub fn title(&self) -> String {
         if self.state.running_entry.is_some() {
-            "* Toggl Tracker".to_string()
+            "* Toggl Tracker".to_owned()
         } else {
-            "Toggl Tracker".to_string()
+            "Toggl Tracker".to_owned()
         }
     }
 
@@ -184,7 +192,7 @@ impl App {
             }
             Message::DataFetched(state) => {
                 info!("Loaded initial data.");
-                if !matches!(&self.screen, Screen::Loaded(_)) {
+                if !matches!(self.screen, Screen::Loaded(_)) {
                     self.screen = Screen::Loaded(TemporaryState::default());
                 }
                 self.state = self.state.clone().update_from_context(state);
@@ -217,8 +225,8 @@ impl App {
             Message::OpenLegalScreen => {
                 self.screen = Screen::Legal(LegalInfo::new());
             }
-            Message::OptimisticUpdate(ref change) => {
-                return if self.state.apply_change(change).is_err() {
+            Message::OptimisticUpdate(change) => {
+                return if self.state.apply_change(&change).is_err() {
                     Command::done(Message::Reload)
                 } else {
                     Command::batch(vec![self.update_icon(), self.save_state()])
@@ -279,7 +287,7 @@ impl App {
                                     entry: new_entry,
                                 })
                             }
-                            Err(e) => Message::Error(e.to_string()),
+                            Err(err) => Message::Error(err.to_string()),
                         }
                     });
                 }
@@ -456,11 +464,11 @@ impl App {
                 )
                 .push(
                     row![button("Load more")
-                        .on_press_maybe(if self.state.has_more_entries {
-                            Some(Message::LoadMore)
-                        } else {
-                            None
-                        })
+                        .on_press_maybe(
+                            self.state
+                                .has_more_entries
+                                .then_some(Message::LoadMore)
+                        )
                         .style(button::secondary)]
                     .padding([10, 10]),
                 );
