@@ -216,7 +216,7 @@ impl EditTimeEntry {
         Self {
             entry,
             api_token: state.api_token.clone(),
-            description_editor: TextEditorExt::new(&description),
+            description_editor: TextEditorExt::new(description.as_ref()),
             start_dt,
             stop_dt,
             error: None,

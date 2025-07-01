@@ -23,9 +23,8 @@ struct EditorHistory {
 }
 
 impl TextEditorExt {
-    pub fn new(text: &Option<impl ToString>) -> Self {
+    pub fn new(text: Option<&impl ToString>) -> Self {
         let original_text = text
-            .as_ref()
             .map(std::string::ToString::to_string)
             .unwrap_or_default();
         Self {

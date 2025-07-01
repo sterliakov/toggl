@@ -160,23 +160,23 @@ impl UpdateStep {
         &self,
     ) -> button::Button<'_, Self, iced::Theme, iced::Renderer> {
         match self {
-            Self::NotStarted => menu_text("Check for updates", Self::Checking),
-            Self::Checking => menu_text_disabled("Checking for updates..."),
-            Self::UpToDate => menu_text_disabled("Up to date."),
+            Self::NotStarted => menu_text(&"Check for updates", Self::Checking),
+            Self::Checking => menu_text_disabled(&"Checking for updates..."),
+            Self::UpToDate => menu_text_disabled(&"Up to date."),
             Self::MaybeUnsupported(method) => menu_text(
-                format!("Use {method} to update. Click again to force update"),
+                &format!("Use {method} to update. Click again to force update"),
                 Self::Running,
             )
             .style(button::danger),
             Self::UpdateAvailable => {
-                menu_text("Update available, click to update", Self::Running)
+                menu_text(&"Update available, click to update", Self::Running)
             }
-            Self::Running => menu_text_disabled("Installing the update..."),
+            Self::Running => menu_text_disabled(&"Installing the update..."),
             Self::Success => {
-                menu_text_disabled("Updated, please restart the application.")
+                menu_text_disabled(&"Updated, please restart the application.")
             }
             Self::Error => {
-                menu_text_disabled("Failed to update.").style(button::danger)
+                menu_text_disabled(&"Failed to update.").style(button::danger)
             }
         }
     }

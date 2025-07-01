@@ -60,13 +60,13 @@ impl Customization {
         )
     }
 
-    pub fn format_date(&self, date: &NaiveDate) -> String {
+    pub fn format_date(&self, date: NaiveDate) -> String {
         date.format(self.date_format.to_format_string()).to_string()
     }
 
     pub fn format_datetime(
         &self,
-        datetime: &Option<DateTime<Local>>,
+        datetime: Option<&DateTime<Local>>,
     ) -> String {
         datetime.as_ref().map_or_else(String::new, |date| {
             date.format(&self.datetime_format()).to_string()
@@ -118,6 +118,7 @@ pub enum CustomizationMessage {
 }
 
 impl Customization {
+    #[allow(clippy::needless_pass_by_value)]
     pub fn update(
         &mut self,
         message: CustomizationMessage,
@@ -154,34 +155,34 @@ impl Customization {
 
         menu::Item::with_menu(
             top_level_menu_text(
-                "Customization",
+                &"Customization",
                 wrapper(CustomizationMessage::Discarded),
             ),
             menu::Menu::new(vec![
                 menu::Item::with_menu(
                     menu_text(
-                        "Time format",
+                        &"Time format",
                         wrapper(CustomizationMessage::Discarded),
                     ),
                     self.time_format_menu(wrapper),
                 ),
                 menu::Item::with_menu(
                     menu_text(
-                        "Date format",
+                        &"Date format",
                         wrapper(CustomizationMessage::Discarded),
                     ),
                     self.date_format_menu(wrapper),
                 ),
                 menu::Item::with_menu(
                     menu_text(
-                        "Week beginning",
+                        &"Week beginning",
                         wrapper(CustomizationMessage::Discarded),
                     ),
                     self.week_beginning_menu(wrapper),
                 ),
                 menu::Item::new(menu_button(
                     row![
-                        default_button_text("Dark mode")
+                        default_button_text(&"Dark mode")
                             .width(iced::Length::Fill),
                         toggler(self.dark_mode).on_toggle(|_| wrapper(
                             CustomizationMessage::ToggleDarkMode
@@ -242,7 +243,7 @@ impl Customization {
                 .iter()
                 .map(|f| {
                     menu_select_item(
-                        **f,
+                        &**f,
                         self.week_start_day == *f,
                         wrapper(CustomizationMessage::SelectWeekBeginning(*f)),
                     )
@@ -252,7 +253,7 @@ impl Customization {
         .max_width(120f32)
     }
 
-    pub fn update_from_preferences(self, preferences: Preferences) -> Self {
+    pub fn update_from_preferences(self, preferences: &Preferences) -> Self {
         Self {
             date_format: DateFormat::from_toggl(&preferences.date_format),
             time_format: TimeFormat::from_toggl(&preferences.time_format),

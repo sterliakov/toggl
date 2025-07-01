@@ -16,6 +16,7 @@ fn datetime_serialize_utc<S: Serializer>(
     x.to_utc().serialize(s)
 }
 
+#[expect(clippy::ref_option)]
 fn maybe_datetime_serialize_utc<S: Serializer>(
     x: &Option<DateTime<Local>>,
     s: S,

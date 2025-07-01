@@ -86,7 +86,7 @@ impl State {
             default_project: project_id,
             earliest_entry_time,
             customization: self.customization.update_from_preferences(
-                me.preferences.with_beginning_of_week(me.beginning_of_week),
+                &me.preferences.with_beginning_of_week(me.beginning_of_week),
             ),
             ..self
         }
@@ -138,7 +138,7 @@ impl State {
             .sort_by_key(|e| std::cmp::Reverse(e.start));
     }
 
-    pub fn apply_change(&mut self, change: EntryEditInfo) -> Result<(), ()> {
+    pub fn apply_change(&mut self, change: &EntryEditInfo) -> Result<(), ()> {
         //! Apply an optimistic update.
         //!
         //! If `Ok()`, the changes are unambiguous. Otherwise a full resync
@@ -510,7 +510,7 @@ mod test_updates {
             };
 
             assert!(state
-                .apply_change(EntryEditInfo {
+                .apply_change(&EntryEditInfo {
                     action: EntryEditAction::Update,
                     entry: entry(now, 21, Some(10), 1),
                 })
@@ -520,7 +520,7 @@ mod test_updates {
             assert_eq!(state.running_entry, running_entry);
 
             assert!(state
-                .apply_change(EntryEditInfo {
+                .apply_change(&EntryEditInfo {
                     action: EntryEditAction::Delete,
                     entry: entry(now, 21, Some(10), 1),
                 })
@@ -529,7 +529,7 @@ mod test_updates {
             assert_eq!(state.time_entries.len(), 0);
 
             assert!(state
-                .apply_change(EntryEditInfo {
+                .apply_change(&EntryEditInfo {
                     action: EntryEditAction::Create,
                     entry: entry(now, 21, Some(10), 1),
                 })
@@ -539,7 +539,7 @@ mod test_updates {
             assert_eq!(state.running_entry, running_entry);
 
             // Make it running again, conflicts if already running
-            let res = state.apply_change(EntryEditInfo {
+            let res = state.apply_change(&EntryEditInfo {
                 action: EntryEditAction::Update,
                 entry: entry(now, 21, None, 1),
             });
@@ -564,7 +564,7 @@ mod test_updates {
         };
 
         assert!(state
-            .apply_change(EntryEditInfo {
+            .apply_change(&EntryEditInfo {
                 action: EntryEditAction::Update,
                 entry: entry(now, 12, None, 2),
             })
@@ -574,7 +574,7 @@ mod test_updates {
         assert_eq!(state.running_entry, Some(entry(now, 12, None, 2)));
 
         assert!(state
-            .apply_change(EntryEditInfo {
+            .apply_change(&EntryEditInfo {
                 action: EntryEditAction::Update,
                 entry: entry(now, 11, Some(1), 2),
             })
@@ -595,7 +595,7 @@ mod test_updates {
         };
 
         assert!(state
-            .apply_change(EntryEditInfo {
+            .apply_change(&EntryEditInfo {
                 action: EntryEditAction::Delete,
                 entry: entry(now, 12, None, 2),
             })
@@ -605,7 +605,7 @@ mod test_updates {
         assert_eq!(state.running_entry, None);
 
         assert!(state
-            .apply_change(EntryEditInfo {
+            .apply_change(&EntryEditInfo {
                 action: EntryEditAction::Create,
                 entry: entry(now, 11, None, 2),
             })
@@ -615,7 +615,7 @@ mod test_updates {
         assert_eq!(state.running_entry, Some(entry(now, 11, None, 2)));
 
         assert!(state
-            .apply_change(EntryEditInfo {
+            .apply_change(&EntryEditInfo {
                 action: EntryEditAction::Create,
                 entry: entry(now, 11, None, 3),
             })

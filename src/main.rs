@@ -7,6 +7,9 @@
 )]
 #![allow(clippy::unreadable_literal)]
 #![allow(clippy::missing_errors_doc)]
+#![allow(clippy::unsafe_derive_deserialize)]
+
+use std::sync::LazyLock;
 
 use clap::{crate_version, Parser};
 use entities::Preferences;
@@ -18,7 +21,6 @@ use iced::widget::{
 use iced::{keyboard, window, Center, Element, Fill, Padding, Task as Command};
 use iced_aw::menu;
 use itertools::Itertools;
-use lazy_static::lazy_static;
 use log::{debug, error, info};
 use screens::{LegalInfo, LegalInfoMessage};
 use state::{EntryEditAction, EntryEditInfo};
@@ -124,18 +126,18 @@ enum Message {
     OptimisticUpdate(EntryEditInfo),
 }
 
-lazy_static! {
-    static ref RUNNING_ICON: window::Icon = window::icon::from_file_data(
-        include_bytes!("../assets/icon.png"),
-        None
-    )
-    .expect("Icon must parse");
-    static ref DEFAULT_ICON: window::Icon = window::icon::from_file_data(
+static RUNNING_ICON: LazyLock<window::Icon> = LazyLock::new(|| {
+    window::icon::from_file_data(include_bytes!("../assets/icon.png"), None)
+        .expect("Icon must parse")
+});
+
+static DEFAULT_ICON: LazyLock<window::Icon> = LazyLock::new(|| {
+    window::icon::from_file_data(
         include_bytes!("../assets/icon-gray.png"),
-        None
+        None,
     )
-    .expect("Icon must parse");
-}
+    .expect("Icon must parse")
+});
 
 impl App {
     pub fn new() -> (Self, Command<Message>) {
@@ -215,7 +217,7 @@ impl App {
             Message::OpenLegalScreen => {
                 self.screen = Screen::Legal(LegalInfo::new());
             }
-            Message::OptimisticUpdate(change) => {
+            Message::OptimisticUpdate(ref change) => {
                 return if self.state.apply_change(change).is_err() {
                     Command::done(Message::Reload)
                 } else {
@@ -511,7 +513,7 @@ impl App {
                 .iter()
                 .map(|ws| {
                     menu_select_item(
-                        ws.name.clone(),
+                        &ws.name.clone(),
                         selected_ws == Some(ws.id),
                         Message::SelectWorkspace(ws.id),
                     )
@@ -523,7 +525,7 @@ impl App {
         let selected_project = self.state.default_project;
         let project_menu = menu::Menu::new(
             std::iter::once(menu_select_item(
-                "None",
+                &"None",
                 selected_project.is_none(),
                 Message::SelectProject(None),
             ))
@@ -540,24 +542,24 @@ impl App {
 
         menu::MenuBar::new(vec![
             menu::Item::with_menu(
-                top_level_menu_text("Info", Message::Discarded),
+                top_level_menu_text(&"Info", Message::Discarded),
                 menu::Menu::new(vec![
-                    menu::Item::new(menu_text("Reload", Message::Reload)),
+                    menu::Item::new(menu_text(&"Reload", Message::Reload)),
                     menu::Item::with_menu(
-                        menu_text("Workspaces", Message::Discarded),
+                        menu_text(&"Workspaces", Message::Discarded),
                         ws_menu,
                     ),
                     menu::Item::with_menu(
-                        menu_text("Projects", Message::Discarded),
+                        menu_text(&"Projects", Message::Discarded),
                         project_menu,
                     ),
                     menu::Item::new(menu_text(
-                        "Legal info",
+                        &"Legal info",
                         Message::OpenLegalScreen,
                     )),
-                    menu::Item::new(menu_text("Log out", Message::Logout)),
+                    menu::Item::new(menu_text(&"Log out", Message::Logout)),
                     menu::Item::new(
-                        menu_text_disabled(format!(
+                        menu_text_disabled(&format!(
                             "Version: {}",
                             crate_version!()
                         ))
@@ -602,7 +604,7 @@ impl App {
     ) -> menu::Item<'_, Message, iced::Theme, iced::Renderer> {
         menu::Item::new(
             menu_button(
-                default_button_text(format!(
+                default_button_text(&format!(
                     "Week total: {}",
                     duration_to_hm(&self.state.week_total())
                 ))
@@ -644,7 +646,7 @@ impl App {
             std::iter::once(
                 row!(
                     container(text(
-                        self.state.customization.format_date(&start)
+                        self.state.customization.format_date(start)
                     ))
                     .align_left(iced::Length::Shrink)
                     .padding(Padding {

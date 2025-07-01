@@ -79,7 +79,8 @@ impl CustomWidget<DateTimeEditMessage> for DateTimeWidget {
             }
             SubmitTime(time) => {
                 self.dt = Some(with_time(self.dt, time, Local::now));
-                self.full_text = customization.format_datetime(&self.dt);
+                self.full_text =
+                    customization.format_datetime(self.dt.as_ref());
                 self.error = None;
                 self.show_time_picker = false;
             }
@@ -91,7 +92,8 @@ impl CustomWidget<DateTimeEditMessage> for DateTimeWidget {
             }
             SubmitDate(date) => {
                 self.dt = Some(with_date(self.dt, date, Local::now));
-                self.full_text = customization.format_datetime(&self.dt);
+                self.full_text =
+                    customization.format_datetime(self.dt.as_ref());
                 self.error = None;
                 self.show_date_picker = false;
             }
@@ -122,15 +124,15 @@ impl CustomWidget<DateTimeEditMessage> for DateTimeWidget {
 impl DateTimeWidget {
     pub fn new(
         start: Option<DateTime<Local>>,
-        input_label: impl ToString,
-        input_id: impl ToString,
+        input_label: &str,
+        input_id: &str,
         customization: &Customization,
     ) -> Self {
         Self {
             input_label: input_label.to_string(),
             input_id: input_id.to_string(),
             dt: start,
-            full_text: customization.format_datetime(&start),
+            full_text: customization.format_datetime(start.as_ref()),
             show_time_picker: false,
             show_date_picker: false,
             error: None,
