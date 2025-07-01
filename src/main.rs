@@ -1,9 +1,4 @@
-#![deny(
-    clippy::all,
-    clippy::pedantic,
-    clippy::nursery,
-    // clippy::cargo,
-)]
+#![deny(clippy::all, clippy::pedantic, clippy::nursery)]
 #![allow(clippy::unreadable_literal)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::unsafe_derive_deserialize)]
