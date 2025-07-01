@@ -757,7 +757,7 @@ impl App {
 
     async fn load_everything(api_token: String) -> Message {
         let client = Client::from_api_token(&api_token);
-        match futures::try_join!(
+        match tokio::try_join!(
             Preferences::load(&client),
             ExtendedMe::load(&client),
         ) {

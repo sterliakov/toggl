@@ -1,3 +1,7 @@
+## 0.3.1 (unreleased)
+
+* bugfix: removed unused dependencies
+
 ## 0.3.0
 
 * feature: support multiple profiles
