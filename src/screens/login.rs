@@ -88,12 +88,14 @@ impl LoginScreen {
 
     async fn call_submit(email: &str, password: &str) -> NetResult<String> {
         let client = Client::from_email_password(email, password);
-        let mut rsp = client
+        let rsp: LoginResponse = client
             .get(format!("{}/api/v9/me", Client::BASE_URL))
             .send()
+            .await?
+            .error_for_status()?
+            .json()
             .await?;
-        Client::check_status(&mut rsp).await?;
-        Ok(rsp.body_json::<LoginResponse>().await?.api_token)
+        Ok(rsp.api_token)
     }
 }
 

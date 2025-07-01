@@ -4,6 +4,9 @@
         "config:recommended",
         "group:allNonMajor"
     ],
+    "lockFileMaintenance": {
+        "enabled": true
+    },
     "pre-commit": {
         "enabled": true
     }
