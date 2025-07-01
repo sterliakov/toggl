@@ -27,15 +27,14 @@ pub struct ExtendedMe {
 impl ExtendedMe {
     pub async fn load(client: &Client) -> NetResult<Self> {
         info!("Fetching profile and related objects...");
-        client
+        let mut rsp = client
             .get(format!(
                 "{}/api/v9/me?with_related_data=true",
                 Client::BASE_URL
             ))
             .send()
-            .await?
-            .error_for_status()?
-            .json()
-            .await
+            .await?;
+        Client::check_status(&mut rsp).await?;
+        rsp.body_json().await
     }
 }

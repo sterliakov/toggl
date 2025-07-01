@@ -52,14 +52,13 @@ impl TimeEntry {
             before: Option<DateTime<Local>>,
         }
 
-        let entries: Vec<Self> = client
+        let mut res = client
             .get(format!("{}/api/v9/me/time_entries", Client::BASE_URL))
-            .query(&QueryParams { before })
+            .query(&QueryParams { before })?
             .send()
-            .await?
-            .error_for_status()?
-            .json()
             .await?;
+        Client::check_status(&mut res).await?;
+        let entries = res.body_json::<Vec<Self>>().await?;
         if before.is_none() {
             Ok(entries)
         } else {
@@ -90,22 +89,21 @@ impl TimeEntry {
         }
 
         debug!("Updating a time entry {}...", self.id);
-        client
+        let mut res = client
             .put(format!(
                 "{}/api/v9/workspaces/{}/time_entries/{}",
                 Client::BASE_URL,
                 self.workspace_id,
                 self.id
             ))
-            .json(&UpdateRequest {
+            .body_json(&UpdateRequest {
                 entry: self,
                 tag_action: "delete",
-            })
+            })?
             .send()
-            .await?
-            .error_for_status()?
-            .json()
-            .await
+            .await?;
+        Client::check_status(&mut res).await?;
+        res.body_json().await
     }
 
     pub async fn stop(&self, client: &Client) -> NetResult<Self> {
@@ -114,7 +112,7 @@ impl TimeEntry {
             self.stop.is_none(),
             "Attempted to stop an already stopped entry"
         );
-        client
+        let mut res = client
             .patch(format!(
                 "{}/api/v9/workspaces/{}/time_entries/{}/stop",
                 Client::BASE_URL,
@@ -122,15 +120,14 @@ impl TimeEntry {
                 self.id
             ))
             .send()
-            .await?
-            .error_for_status()?
-            .json()
-            .await
+            .await?;
+        Client::check_status(&mut res).await?;
+        res.body_json().await
     }
 
     pub async fn delete(&self, client: &Client) -> NetResult<()> {
         debug!("Deleting a time entry {}...", self.id);
-        client
+        let mut res = client
             .delete(format!(
                 "{}/api/v9/workspaces/{}/time_entries/{}",
                 Client::BASE_URL,
@@ -138,9 +135,8 @@ impl TimeEntry {
                 self.id
             ))
             .send()
-            .await?
-            .error_for_status()?;
-        Ok(())
+            .await?;
+        Client::check_status(&mut res).await
     }
 
     pub async fn create_running(
@@ -158,18 +154,17 @@ impl TimeEntry {
             workspace_id,
             project_id,
         };
-        client
+        let mut res = client
             .post(format!(
                 "{}/api/v9/workspaces/{}/time_entries",
                 Client::BASE_URL,
                 entry.workspace_id
             ))
-            .json(&entry)
+            .body_json(&entry)?
             .send()
-            .await?
-            .error_for_status()?
-            .json()
-            .await
+            .await?;
+        Client::check_status(&mut res).await?;
+        res.body_json().await
     }
 
     pub async fn duplicate(self, client: &Client) -> NetResult<Self> {
