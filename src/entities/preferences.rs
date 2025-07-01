@@ -39,7 +39,7 @@ impl Preferences {
         default_workspace_id: Option<WorkspaceId>,
         client: &Client,
     ) -> NetResult<()> {
-        futures::try_join!(
+        tokio::try_join!(
             self.save_base(client),
             self.save_profile(default_workspace_id, client)
         )?;

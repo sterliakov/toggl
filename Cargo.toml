@@ -1,16 +1,14 @@
 [dependencies]
 atty = "0.2.14"
 base64 = "0.22.1"
-chrono = {version = "0.4.38", features = ["serde", "unstable-locales"]}
+chrono = {version = "0.4.38", features = ["serde"]}
 clap = {version = "4.5.36", features = ["cargo", "derive"]}
 directories-next = "2.0.0"
 env_logger = "0.11.5"
-futures = "0.3.31"
 iced = {version = "0.13.1", features = ["tokio", "debug", "advanced", "image"]}
 iced_aw = {version = "0.12.2", features = ["badge", "drop_down", "menu", "date_picker", "time_picker"], default-features = false}
 iced_fonts = {version = "0.2.1", features = ["bootstrap", "required"]}
 itertools = "0.14.0"
-lazy_static = "1.5.0"
 log = {version = "0.4.22", features = ["max_level_trace", "release_max_level_info"]}
 opener = "0.8.0"
 openssl = {version = "0.10.66", features = ["vendored"]}
@@ -20,9 +18,6 @@ serde = {version = "1.0.210", features = ["derive"]}
 serde_json = "1.0.128"
 sys-locale = "0.3.1"
 tokio = {version = "1.45.1", features = ["fs", "time", "macros", "rt-multi-thread"]}
-
-[dev-dependencies]
-async-std = {version = "1.13.0", features = ["attributes"]}
 
 [package]
 categories = ["gui"]
@@ -35,7 +30,7 @@ license = "MIT"
 name = "toggl-tracker"
 readme = "README.md"
 repository = "https://github.com/sterliakov/toggl"
-version = "0.3.0"
+version = "0.3.1"
 
 [profile.release]
 lto = true
