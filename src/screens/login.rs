@@ -10,6 +10,7 @@ use crate::widgets::CustomWidget;
 pub struct LoginScreen {
     email: String,
     password: String,
+    profile_name: Option<String>,
     error: String,
 }
 
@@ -17,6 +18,7 @@ pub struct LoginScreen {
 pub enum LoginScreenMessage {
     EmailEdited(String),
     PasswordEdited(String),
+    ProfileNameEdited(String),
     Submit,
     Completed { email: String, api_token: String },
     Error(String),
@@ -24,19 +26,26 @@ pub enum LoginScreenMessage {
 
 impl CustomWidget<LoginScreenMessage> for LoginScreen {
     fn view(&self, _state: &State) -> Element<'_, LoginScreenMessage> {
+        use LoginScreenMessage::*;
+
         let content = column![
-            text_input("Email", &self.email)
+            text_input("Email *", &self.email)
                 .id("email-input")
-                .on_submit(LoginScreenMessage::Submit)
-                .on_input(LoginScreenMessage::EmailEdited),
-            text_input("Password", &self.password)
+                .on_submit(Submit)
+                .on_input(EmailEdited),
+            text_input("Password *", &self.password)
                 .id("password-input")
                 .secure(true)
-                .on_submit(LoginScreenMessage::Submit)
-                .on_input(LoginScreenMessage::PasswordEdited),
-            button("Login")
-                .on_press(LoginScreenMessage::Submit)
-                .style(button::primary),
+                .on_submit(Submit)
+                .on_input(PasswordEdited),
+            text_input(
+                "Profile name",
+                self.profile_name.as_ref().unwrap_or(&self.email)
+            )
+            .id("profile-name-input")
+            .on_submit(Submit)
+            .on_input(ProfileNameEdited),
+            button("Login").on_press(Submit).style(button::primary),
             text(&self.error).style(text::danger)
         ]
         .spacing(10);
@@ -49,16 +58,21 @@ impl CustomWidget<LoginScreenMessage> for LoginScreen {
         message: LoginScreenMessage,
         _state: &State,
     ) -> Command<LoginScreenMessage> {
+        use LoginScreenMessage::*;
+
         match message {
-            LoginScreenMessage::EmailEdited(email) => self.email = email,
-            LoginScreenMessage::PasswordEdited(password) => {
+            EmailEdited(email) => self.email = email,
+            PasswordEdited(password) => {
                 self.password = password;
             }
-            LoginScreenMessage::Error(err) => self.error = err,
-            LoginScreenMessage::Submit => {
+            ProfileNameEdited(profile_name) => {
+                self.profile_name = Some(profile_name);
+            }
+            Error(err) => self.error = err,
+            Submit => {
                 return Command::future(self.clone().submit());
             }
-            LoginScreenMessage::Completed { .. } => {}
+            Completed { .. } => {}
         }
         Command::none()
     }
@@ -80,9 +94,18 @@ impl LoginScreen {
                 "Password must not be empty".to_owned(),
             );
         }
+        let profile_name = self
+            .profile_name
+            .clone()
+            .unwrap_or_else(|| self.email.clone());
+        if self.profile_name.is_some_and(|p| p.is_empty()) {
+            return LoginScreenMessage::Error(
+                "Profile name must not be empty".to_owned(),
+            );
+        }
         match Self::call_submit(&self.email, &self.password).await {
             Ok(token) => LoginScreenMessage::Completed {
-                email: self.email.clone(),
+                email: profile_name,
                 api_token: token,
             },
             Err(e) => LoginScreenMessage::Error(e.to_string()),

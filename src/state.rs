@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Local};
+use itertools::Itertools as _;
 use log::error;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
@@ -14,8 +15,8 @@ use crate::utils::{Client, NetResult};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct State {
-    active_profile: String,
-    profiles: HashMap<String, Profile>,
+    pub active_profile: String,
+    pub profiles: HashMap<String, Profile>,
 }
 
 impl Default for State {
@@ -294,10 +295,16 @@ impl State {
             StatePersistenceError::FileSystem
         })?;
 
-        serde_json::from_str(&contents).map_err(|e| {
+        let mut state: Self = serde_json::from_str(&contents).map_err(|e| {
             error!("Failed to parse the state file: {e}");
             StatePersistenceError::Format
-        })
+        })?;
+        state.profiles.retain(|_, p| !p.api_token.is_empty());
+        if state.profiles.is_empty() {
+            Err(StatePersistenceError::Format)
+        } else {
+            Ok(state.into())
+        }
     }
 
     pub async fn save(self) -> Result<(), StatePersistenceError> {
@@ -333,7 +340,7 @@ impl State {
         Ok(())
     }
 
-    pub async fn delete_file(self) -> Result<(), StatePersistenceError> {
+    async fn delete_file() -> Result<(), StatePersistenceError> {
         let path = Self::path();
         tokio::fs::remove_file(path).await.map_err(|e| {
             error!("Failed to remove state file: {e}");
@@ -353,6 +360,28 @@ impl State {
             .unwrap_or_else(|| {
                 panic!("Profile '{}' not found", self.active_profile)
             })
+    }
+
+    pub async fn remove_profile(
+        mut self,
+        profile_name: &str,
+    ) -> Result<Option<Self>, StatePersistenceError> {
+        if self.profiles.len() > 1 {
+            self.profiles.retain(|name, _| name != profile_name);
+            if profile_name == self.active_profile {
+                let next_name =
+                    &self.profile_names().next().expect("to find profile");
+                self.active_profile.clone_from(next_name);
+            }
+            Ok(Some(self))
+        } else {
+            Self::delete_file().await?;
+            Ok(None)
+        }
+    }
+
+    pub fn profile_names(&self) -> impl Iterator<Item = String> + '_ {
+        self.profiles.keys().sorted().cloned()
     }
 
     pub fn update_from_context(&mut self, me: ExtendedMe) {

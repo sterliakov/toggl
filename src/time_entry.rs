@@ -60,12 +60,7 @@ impl TimeEntry {
             .error_for_status()?
             .json()
             .await?;
-        if before.is_none() {
-            Ok(entries)
-        } else {
-            // The API parses this bound as inclusive, we don't need duplicates
-            Ok(entries[1..].to_vec())
-        }
+        Ok(entries)
     }
 
     pub fn split_running(all_entries: Vec<Self>) -> (Option<Self>, Vec<Self>) {

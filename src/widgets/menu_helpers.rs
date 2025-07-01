@@ -1,11 +1,23 @@
 use iced::widget::button::Status;
 use iced::widget::{button, text};
 use iced_aw::menu;
+use iced_fonts::Bootstrap;
+
+use super::icon_text;
 
 const MENU_TEXT_SIZE: u16 = 11;
 
 pub fn default_button_text<'a>(content: &impl ToString) -> text::Text<'a> {
     text(content.to_string()).size(MENU_TEXT_SIZE)
+}
+
+pub fn menu_icon<'a, T>(icon: Bootstrap) -> button::Button<'a, T> {
+    button(
+        icon_text(icon)
+            .size(MENU_TEXT_SIZE)
+            .align_x(iced::alignment::Horizontal::Center)
+            .width(iced::Length::Shrink),
+    )
 }
 
 fn menu_button_base<'a, T>(
