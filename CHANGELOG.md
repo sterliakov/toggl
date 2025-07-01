@@ -1,3 +1,8 @@
+## 0.3.0
+
+* feature: support multiple profiles
+* chore: migrate to `tokio` and `reqwest` for dependency deduplication
+
 ## 0.2.5
 
 * bugfix: reset running entry description after submission
