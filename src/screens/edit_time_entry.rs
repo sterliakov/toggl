@@ -200,22 +200,29 @@ impl EditTimeEntry {
             Some(entry.start),
             "Start",
             "start-input",
-            &state.customization,
+            state.customization(),
         );
         let stop_dt = DateTimeWidget::new(
             entry.stop,
             "Stop",
             "stop-input",
-            &state.customization,
+            state.customization(),
         );
-        let selected_project = entry.project(&state.projects);
+        let profile = state.current_profile();
+        let selected_project = entry.project(&profile.projects);
         let projects: Vec<MaybeProject> = std::iter::once(MaybeProject::None)
-            .chain(state.projects.iter().cloned().map(std::convert::Into::into))
+            .chain(
+                profile
+                    .projects
+                    .iter()
+                    .cloned()
+                    .map(std::convert::Into::into),
+            )
             .collect();
         let tags = entry.tags.clone();
         Self {
             entry,
-            api_token: state.api_token.clone(),
+            api_token: state.api_token(),
             description_editor: TextEditorExt::new(description.as_ref()),
             start_dt,
             stop_dt,
@@ -223,7 +230,7 @@ impl EditTimeEntry {
             projects,
             selected_project,
             tag_editor: TagEditor::new(
-                state.tags.iter().map(|t| t.name.clone()).collect(),
+                profile.tags.iter().map(|t| t.name.clone()).collect(),
                 tags,
             ),
         }

@@ -29,11 +29,12 @@ pub enum RunningEntryMessage {
 
 impl CustomWidget<RunningEntryMessage> for RunningEntry {
     fn view(&self, state: &State) -> iced::Element<'_, RunningEntryMessage> {
-        let Some(entry) = state.running_entry.clone() else {
+        let profile = state.current_profile();
+        let Some(entry) = profile.running_entry.clone() else {
             return self.new_entry_input();
         };
 
-        let project = entry.project(&state.projects);
+        let project = entry.project(&profile.projects);
         let name = entry.description_text();
         let duration = entry.duration_string();
         container(
@@ -82,16 +83,17 @@ impl CustomWidget<RunningEntryMessage> for RunningEntry {
         state: &State,
     ) -> Command<RunningEntryMessage> {
         use RunningEntryMessage::*;
+        let profile = state.current_profile();
         match message {
             Create => {
-                let token = state.api_token.clone();
+                let token = state.api_token();
                 let description = self.draft_description.clone();
-                let Some(workspace_id) = state.default_workspace else {
+                let Some(workspace_id) = profile.default_workspace else {
                     return Command::done(Error(
                         "No workspace selected!".to_owned(),
                     ));
                 };
-                let project_id = state.default_project;
+                let project_id = profile.default_project;
                 Command::future(async move {
                     let client = Client::from_api_token(&token);
                     let fut = TimeEntry::create_running(
@@ -118,9 +120,9 @@ impl CustomWidget<RunningEntryMessage> for RunningEntry {
                 Command::none()
             }
             Stop => {
-                if let Some(entry) = state.running_entry.clone() {
+                if let Some(entry) = profile.running_entry.clone() {
                     info!("Stopping running entry {}...", entry.id);
-                    let token = state.api_token.clone();
+                    let token = state.api_token();
                     Command::future(async move {
                         let client = Client::from_api_token(&token);
                         match entry.stop(&client).await {

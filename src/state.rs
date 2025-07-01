@@ -1,4 +1,7 @@
+use std::collections::HashMap;
+
 use chrono::{DateTime, Duration, Local};
+use itertools::Itertools as _;
 use log::error;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
@@ -10,9 +13,28 @@ use crate::entities::{
 use crate::time_entry::TimeEntry;
 use crate::utils::{Client, NetResult};
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct State {
-    pub api_token: String,
+    pub active_profile: String,
+    pub profiles: HashMap<String, Profile>,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            active_profile: "default".to_owned(),
+            profiles: {
+                let mut dict = HashMap::new();
+                dict.insert("default".to_owned(), Profile::default());
+                dict
+            },
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Profile {
+    api_token: String,
     pub time_entries: Vec<TimeEntry>,
     pub running_entry: Option<TimeEntry>,
     pub has_more_entries: bool,
@@ -24,7 +46,7 @@ pub struct State {
     pub tags: Vec<Tag>,
     pub default_workspace: Option<WorkspaceId>,
     pub default_project: Option<ProjectId>,
-    pub customization: Customization,
+    customization: Customization,
 }
 
 #[derive(Debug, Clone)]
@@ -56,7 +78,14 @@ pub struct EntryEditInfo {
     pub action: EntryEditAction,
 }
 
-impl State {
+impl Profile {
+    pub fn new(api_token: String) -> Self {
+        Self {
+            api_token,
+            ..Self::default()
+        }
+    }
+
     pub fn update_from_context(self, me: ExtendedMe) -> Self {
         let ws_id = me
             .default_workspace_id
@@ -210,9 +239,39 @@ impl State {
             }
         }
     }
+
+    pub async fn save_customization(&self) -> NetResult<()> {
+        let client = Client::from_api_token(&self.api_token);
+        self.customization
+            .clone()
+            .save(self.default_workspace, &client)
+            .await
+    }
 }
 
 impl State {
+    pub fn ensure_profile(&mut self, email: String, api_token: String) {
+        self.profiles
+            .entry(email)
+            .and_modify(|p| p.api_token.clone_from(&api_token))
+            .or_insert_with(|| Profile::new(api_token));
+    }
+    pub fn select_profile(&mut self, email: String) {
+        self.active_profile = email;
+    }
+
+    pub fn api_token(&self) -> String {
+        self.current_profile().api_token.clone()
+    }
+
+    pub fn customization(&self) -> &Customization {
+        &self.current_profile().customization
+    }
+
+    pub fn customization_mut(&mut self) -> &mut Customization {
+        &mut self.current_profile_mut().customization
+    }
+
     fn path() -> std::path::PathBuf {
         directories_next::ProjectDirs::from("rs", "Iced", "toggl-tracker")
             .map_or_else(
@@ -236,10 +295,16 @@ impl State {
             StatePersistenceError::FileSystem
         })?;
 
-        serde_json::from_str(&contents).map_err(|e| {
+        let mut state: Self = serde_json::from_str(&contents).map_err(|e| {
             error!("Failed to parse the state file: {e}");
             StatePersistenceError::Format
-        })
+        })?;
+        state.profiles.retain(|_, p| !p.api_token.is_empty());
+        if state.profiles.is_empty() {
+            Err(StatePersistenceError::Format)
+        } else {
+            Ok(state.into())
+        }
     }
 
     pub async fn save(self) -> Result<(), StatePersistenceError> {
@@ -275,7 +340,7 @@ impl State {
         Ok(())
     }
 
-    pub async fn delete_file(self) -> Result<(), StatePersistenceError> {
+    async fn delete_file() -> Result<(), StatePersistenceError> {
         let path = Self::path();
         tokio::fs::remove_file(path).await.map_err(|e| {
             error!("Failed to remove state file: {e}");
@@ -283,12 +348,54 @@ impl State {
         })
     }
 
-    pub async fn save_customization(&self) -> NetResult<()> {
-        let client = Client::from_api_token(&self.api_token);
-        self.customization
-            .clone()
-            .save(self.default_workspace, &client)
-            .await
+    pub fn current_profile(&self) -> &Profile {
+        self.profiles.get(&self.active_profile).unwrap_or_else(|| {
+            panic!("Profile '{}' not found", self.active_profile)
+        })
+    }
+
+    pub fn current_profile_mut(&mut self) -> &mut Profile {
+        self.profiles
+            .get_mut(&self.active_profile)
+            .unwrap_or_else(|| {
+                panic!("Profile '{}' not found", self.active_profile)
+            })
+    }
+
+    pub async fn remove_profile(
+        mut self,
+        profile_name: &str,
+    ) -> Result<Option<Self>, StatePersistenceError> {
+        if self.profiles.len() > 1 {
+            self.profiles.retain(|name, _| name != profile_name);
+            if profile_name == self.active_profile {
+                let next_name =
+                    &self.profile_names().next().expect("to find profile");
+                self.active_profile.clone_from(next_name);
+            }
+            Ok(Some(self))
+        } else {
+            Self::delete_file().await?;
+            Ok(None)
+        }
+    }
+
+    pub fn profile_names(&self) -> impl Iterator<Item = String> + '_ {
+        self.profiles.keys().sorted().cloned()
+    }
+
+    pub fn update_from_context(&mut self, me: ExtendedMe) {
+        let updated = self.current_profile().clone().update_from_context(me);
+        self.profiles.insert(self.active_profile.clone(), updated);
+    }
+
+    pub fn apply_change(&mut self, change: &EntryEditInfo) -> Result<(), ()> {
+        //! Apply an optimistic update.
+        //!
+        //! If `Ok()`, the changes are unambiguous. Otherwise a full resync
+        //! should be performed.
+
+        self.current_profile_mut().apply_change(change)
     }
 }
 
@@ -298,7 +405,7 @@ mod test {
 
     use chrono::{Duration, Local, TimeDelta};
 
-    use super::State;
+    use super::Profile;
     use crate::customization::WeekDay;
     use crate::entities::{Preferences, Workspace, WorkspaceId};
     use crate::test::test_client;
@@ -336,7 +443,7 @@ mod test {
             default_workspace_id: Some(WorkspaceId::new(1)),
             preferences: Preferences::default(),
         };
-        let mut state = State::default().update_from_context(me);
+        let mut state = Profile::default().update_from_context(me);
         assert_eq!(state.running_entry, Some(e_running));
         assert_eq!(state.time_entries.len(), 1);
         assert_eq!(state.default_workspace, Some(ws.id));
@@ -377,7 +484,7 @@ mod test {
             default_workspace_id: Some(WorkspaceId::new(1)),
             preferences: Preferences::default(),
         };
-        let state = State::default().update_from_context(me);
+        let state = Profile::default().update_from_context(me);
         assert_eq!(state.running_entry, None);
         assert_eq!(state.time_entries.len(), 1);
         assert_eq!(state.earliest_entry_time, Some(e.start));
@@ -397,7 +504,7 @@ mod test {
             default_workspace_id: Some(WorkspaceId::new(1)),
             preferences: Preferences::default(),
         };
-        let state = State::default().update_from_context(me);
+        let state = Profile::default().update_from_context(me);
         assert_eq!(
             state.customization.week_start_day,
             WeekDay(chrono::Weekday::Tue)
@@ -424,15 +531,15 @@ mod test {
             preferences: Preferences::default(),
         };
 
-        let state = State::default().update_from_context(me.clone());
+        let state = Profile::default().update_from_context(me.clone());
         assert_eq!(state.default_workspace, Some(ws2.id));
 
         me.default_workspace_id = None;
-        let state = State::default().update_from_context(me.clone());
+        let state = Profile::default().update_from_context(me.clone());
         assert_eq!(state.default_workspace, Some(ws1.id));
 
         me.default_workspace_id = Some(WorkspaceId::new(0)); // Not found
-        let state = State::default().update_from_context(me);
+        let state = Profile::default().update_from_context(me);
         assert_eq!(state.default_workspace, Some(ws1.id));
     }
 
@@ -440,7 +547,7 @@ mod test {
     async fn test_crud() {
         let client = test_client();
         let me = ExtendedMe::load(&client).await.expect("get me");
-        let state = State::default().update_from_context(me);
+        let state = Profile::default().update_from_context(me);
         assert!(state.default_workspace.is_some());
 
         let mut customization = state.customization;
@@ -454,7 +561,7 @@ mod test {
         // Respect API limits
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         let me = ExtendedMe::load(&client).await.expect("get me");
-        let state = State::default().update_from_context(me);
+        let state = Profile::default().update_from_context(me);
         assert_eq!(state.customization.week_start_day, new_day);
     }
 }
@@ -463,7 +570,7 @@ mod test {
 mod test_updates {
     use chrono::{DateTime, Local, TimeDelta};
 
-    use super::{EntryEditAction, EntryEditInfo, State};
+    use super::{EntryEditAction, EntryEditInfo, Profile};
     use crate::time_entry::TimeEntry;
 
     fn entry(
@@ -496,10 +603,10 @@ mod test_updates {
         // Update old entries
         let running = entry(now, 1, None, 2);
         for running_entry in [None, Some(running)] {
-            let mut state = State {
+            let mut state = Profile {
                 time_entries: vec![entry(now, 11, Some(10), 1)],
                 running_entry: running_entry.clone(),
-                ..State::default()
+                ..Profile::default()
             };
 
             assert!(state
@@ -550,10 +657,10 @@ mod test_updates {
     fn test_state_optimistic_update_running() {
         let now = Local::now() - TimeDelta::days(1);
         let old = entry(now, 21, Some(10), 1);
-        let mut state = State {
+        let mut state = Profile {
             time_entries: vec![old.clone()],
             running_entry: Some(entry(now, 11, None, 2)),
-            ..State::default()
+            ..Profile::default()
         };
 
         assert!(state
@@ -581,10 +688,10 @@ mod test_updates {
     fn test_state_optimistic_update_running_2() {
         let now = Local::now() - TimeDelta::days(1);
         let old = entry(now, 21, Some(10), 1);
-        let mut state = State {
+        let mut state = Profile {
             time_entries: vec![old.clone()],
             running_entry: Some(entry(now, 11, None, 2)),
-            ..State::default()
+            ..Profile::default()
         };
 
         assert!(state

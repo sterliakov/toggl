@@ -13,7 +13,7 @@ mod text_editor_ext;
 pub use base::CustomWidget;
 pub use date_time_widget::{DateTimeEditMessage, DateTimeWidget};
 pub use menu_helpers::{
-    default_button_text, menu_button, menu_select_item, menu_text,
+    default_button_text, menu_button, menu_icon, menu_select_item, menu_text,
     menu_text_disabled, top_level_menu_text,
 };
 pub use running_entry::{RunningEntry, RunningEntryMessage};

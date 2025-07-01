@@ -10,8 +10,8 @@
 #![deny(clippy::filter_map_bool_then)]
 #![deny(clippy::if_then_some_else_none)]
 #![deny(clippy::return_and_then)]
-#![deny(clippy::ref_patterns)]
 
+use std::collections::HashSet;
 use std::sync::LazyLock;
 
 use clap::{crate_version, Parser as _};
@@ -23,12 +23,13 @@ use iced::widget::{
 };
 use iced::{keyboard, window, Center, Element, Fill, Padding, Task as Command};
 use iced_aw::menu;
+use iced_fonts::Bootstrap;
 use itertools::Itertools as _;
 use log::{debug, error, info};
 use screens::{LegalInfo, LegalInfoMessage};
 use state::{EntryEditAction, EntryEditInfo};
 use utils::duration_to_hm;
-use widgets::{default_button_text, menu_button};
+use widgets::{default_button_text, menu_button, menu_icon};
 
 mod cli;
 mod customization;
@@ -117,12 +118,15 @@ enum Message {
     LoadedMore(Vec<TimeEntry>),
     Tick,
     Reload,
-    Logout,
+    Logout(String),
+    LogoutDone,
+    NewProfile,
     Discarded,
     Error(String),
     WindowIdReceived(Option<window::Id>),
     SelectWorkspace(WorkspaceId),
     SelectProject(Option<ProjectId>),
+    SelectProfile(String),
     KeyPressed(NamedKey, keyboard::Modifiers),
     SetUpdateStep(UpdateStep),
     OpenLegalScreen,
@@ -154,7 +158,7 @@ impl App {
     }
 
     pub fn title(&self) -> String {
-        if self.state.running_entry.is_some() {
+        if self.state.current_profile().running_entry.is_some() {
             "* Toggl Tracker".to_owned()
         } else {
             "Toggl Tracker".to_owned()
@@ -162,7 +166,7 @@ impl App {
     }
 
     pub fn icon(&self) -> window::Icon {
-        if self.state.running_entry.is_some() {
+        if self.state.current_profile().running_entry.is_some() {
             RUNNING_ICON.clone()
         } else {
             DEFAULT_ICON.clone()
@@ -185,23 +189,33 @@ impl App {
                     return window::change_icon(id, self.icon());
                 }
             }
-            Message::DataFetched(state) => {
+            Message::DataFetched(context) => {
                 info!("Loaded initial data.");
-                if !matches!(self.screen, Screen::Loaded(_)) {
+                if !matches!(&self.screen, Screen::Loaded(_)) {
                     self.screen = Screen::Loaded(TemporaryState::default());
                 }
-                self.state = self.state.clone().update_from_context(state);
+                self.state.update_from_context(context);
                 let mut steps = vec![self.save_state(), self.update_icon()];
-                if !self.state.has_whole_last_week() {
+                if !self.state.current_profile().has_whole_last_week() {
                     steps.push(Command::done(Message::LoadMore));
                 }
                 return Command::batch(steps);
             }
-            Message::Logout => {
+            Message::Logout(profile) => {
                 info!("Logging out...");
+                let state = self.state.clone();
+                return Command::future(async move {
+                    state.remove_profile(&profile).await
+                })
+                .map(|res| match res {
+                    Ok(Some(new_state)) => {
+                        Message::Loaded(Ok(new_state.into()))
+                    }
+                    Ok(None) | Err(_) => Message::LogoutDone,
+                });
+            }
+            Message::LogoutDone | Message::NewProfile => {
                 self.screen = Screen::Unauthed(LoginScreen::new());
-                return Command::future(self.state.clone().delete_file())
-                    .map(|_| Message::Discarded);
             }
             Message::Error(e) => {
                 error!("Received generic error: {e}");
@@ -227,37 +241,34 @@ impl App {
                     Command::batch(vec![self.update_icon(), self.save_state()])
                 }
             }
+            Message::Loaded(Ok(state)) => {
+                info!("Loaded state file.");
+                if !matches!(self.screen, Screen::Loaded(_)) {
+                    self.screen = Screen::Loaded(TemporaryState::default());
+                }
+                let api_token = state.api_token();
+                self.state = *state;
+                return Command::future(Self::load_everything(api_token));
+            }
+            Message::Loaded(Err(ref e)) => {
+                error!("Failed to load state file: {e}");
+                self.screen = Screen::Unauthed(LoginScreen::new());
+            }
             _ => {}
         }
 
         match &mut self.screen {
-            Screen::Loading => match message {
-                Message::Loaded(Ok(state)) => {
-                    info!("Loaded state file.");
-                    self.screen = Screen::Loaded(TemporaryState::default());
-                    let api_token = state.api_token.clone();
-                    self.state = *state;
-                    return Command::future(Self::load_everything(api_token));
-                }
-                Message::Loaded(Err(e)) => {
-                    error!("Failed to load state file: {e}");
-                    self.screen = Screen::Unauthed(LoginScreen::new());
-                }
-                _ => {}
-            },
+            Screen::Loading => {}
             Screen::Unauthed(screen) => match message {
-                Message::LoginProxy(LoginScreenMessage::Completed(
+                Message::LoginProxy(LoginScreenMessage::Completed {
+                    email,
                     api_token,
-                )) => {
+                }) => {
                     info!("Authenticated successfully.");
                     self.screen = Screen::Loading;
-                    self.state = State {
-                        api_token: api_token.clone(),
-                        ..State::default()
-                    };
-                    return self.save_state().chain(Command::future(
-                        Self::load_everything(api_token),
-                    ));
+                    self.state.ensure_profile(email.clone(), api_token);
+                    self.state.select_profile(email);
+                    return self.save_state().chain(self.load_entries());
                 }
                 Message::LoginProxy(msg) => {
                     return screen
@@ -271,7 +282,7 @@ impl App {
                     self.begin_edit(e);
                 }
                 Message::TimeEntryProxy(TimeEntryMessage::Duplicate(e)) => {
-                    let token = self.state.api_token.clone();
+                    let token = self.state.api_token();
                     return Command::future(async move {
                         let client = Client::from_api_token(&token);
                         let fut = e.duplicate(&client);
@@ -317,7 +328,7 @@ impl App {
                     other => {
                         return self
                             .state
-                            .customization
+                            .customization_mut()
                             .update(other)
                             .map(Message::CustomizationProxy);
                     }
@@ -325,8 +336,9 @@ impl App {
 
                 Message::LoadMore => {
                     info!("Loading older entries...");
-                    let token = self.state.api_token.clone();
-                    let first_start = self.state.earliest_entry_time;
+                    let token = self.state.api_token();
+                    let first_start =
+                        self.state.current_profile().earliest_entry_time;
                     return Command::future(async move {
                         let client = Client::from_api_token(&token);
                         match TimeEntry::load(first_start, &client).await {
@@ -335,15 +347,24 @@ impl App {
                         }
                     });
                 }
-                Message::LoadedMore(entries) => {
+                Message::LoadedMore(mut entries) => {
+                    let already_fetched: HashSet<_> = self
+                        .state
+                        .current_profile()
+                        .time_entries
+                        .iter()
+                        .map(|e| e.id)
+                        .collect();
+                    entries.retain(|e| !already_fetched.contains(&e.id));
                     if entries.is_empty() {
                         info!("No older entries found.");
                     } else {
                         info!("Loaded older entries.");
                     }
-                    self.state.add_entries(entries.into_iter());
+                    let profile = self.state.current_profile_mut();
+                    profile.add_entries(entries.into_iter());
                     let mut steps = vec![self.save_state(), self.update_icon()];
-                    if !self.state.has_whole_last_week() {
+                    if !self.state.current_profile().has_whole_last_week() {
                         steps.push(Command::done(Message::LoadMore));
                     }
                     return Command::batch(steps);
@@ -354,7 +375,8 @@ impl App {
                     return self.load_entries();
                 }
                 Message::SelectWorkspace(ws_id) => {
-                    self.state.default_workspace = Some(ws_id);
+                    self.state.current_profile_mut().default_workspace =
+                        Some(ws_id);
                     return Command::batch(vec![
                         self.save_state(),
                         self.save_customization(),
@@ -362,7 +384,12 @@ impl App {
                     .chain(self.load_entries());
                 }
                 Message::SelectProject(project_id) => {
-                    self.state.default_project = project_id;
+                    self.state.current_profile_mut().default_project =
+                        project_id;
+                    return self.save_state();
+                }
+                Message::SelectProfile(name) => {
+                    self.state.select_profile(name);
                     return self.save_state();
                 }
                 Message::SetUpdateStep(step) => {
@@ -427,7 +454,7 @@ impl App {
     fn save_customization(&self) -> Command<Message> {
         let state = self.state.clone();
         Command::future(async move {
-            match state.save_customization().await {
+            match state.current_profile().save_customization().await {
                 Ok(()) => Message::Discarded,
                 Err(e) => Message::Error(e.to_string()),
             }
@@ -435,7 +462,7 @@ impl App {
     }
 
     fn load_entries(&self) -> Command<Message> {
-        Command::future(Self::load_everything(self.state.api_token.clone()))
+        Command::future(Self::load_everything(self.state.api_token()))
     }
 
     fn begin_edit(&mut self, entry: TimeEntry) {
@@ -444,13 +471,17 @@ impl App {
 
     pub fn view(&self) -> Element<'_, Message> {
         match &self.screen {
-            Screen::Loading => loading_message(&self.error),
+            Screen::Loading => loading_message(
+                &self.error,
+                Message::Logout(self.state.active_profile.clone()),
+            ),
             Screen::Unauthed(screen) => {
                 screen.view(&self.state).map(Message::LoginProxy)
             }
             Screen::Loaded(temp_state) => {
                 let content = column(
                     self.state
+                        .current_profile()
                         .time_entries
                         .iter()
                         .chunk_by(|e| e.start.date_naive())
@@ -461,6 +492,7 @@ impl App {
                     row![button("Load more")
                         .on_press_maybe(
                             self.state
+                                .current_profile()
                                 .has_more_entries
                                 .then_some(Message::LoadMore)
                         )
@@ -509,9 +541,10 @@ impl App {
     }
 
     fn menu(&self) -> Element<'_, Message> {
-        let selected_ws = self.state.default_workspace;
+        let profile = self.state.current_profile();
+        let selected_ws = profile.default_workspace;
         let ws_menu = menu::Menu::new(
-            self.state
+            profile
                 .workspaces
                 .iter()
                 .map(|ws| {
@@ -525,14 +558,14 @@ impl App {
         )
         .max_width(200.0);
 
-        let selected_project = self.state.default_project;
+        let selected_project = profile.default_project;
         let project_menu = menu::Menu::new(
             std::iter::once(menu_select_item(
                 &"None",
                 selected_project.is_none(),
                 Message::SelectProject(None),
             ))
-            .chain(self.state.projects.iter().map(|p| {
+            .chain(profile.projects.iter().map(|p| {
                 menu_select_item(
                     &p.name,
                     selected_project == Some(p.id),
@@ -560,7 +593,13 @@ impl App {
                         &"Legal info",
                         Message::OpenLegalScreen,
                     )),
-                    menu::Item::new(menu_text(&"Log out", Message::Logout)),
+                    menu::Item::with_menu(
+                        menu_text(
+                            &format!("Profile: {}", self.state.active_profile),
+                            Message::Discarded,
+                        ),
+                        self.profile_menu(),
+                    ),
                     menu::Item::new(
                         menu_text_disabled(&format!(
                             "Version: {}",
@@ -586,7 +625,9 @@ impl App {
                 ])
                 .max_width(120.0),
             ),
-            self.state.customization.view(&Message::CustomizationProxy),
+            self.state
+                .customization()
+                .view(&Message::CustomizationProxy),
             self.week_total(),
         ])
         .width(iced::Length::Fill)
@@ -602,17 +643,55 @@ impl App {
         .into()
     }
 
+    fn profile_menu(
+        &self,
+    ) -> menu::Menu<'_, Message, iced::Theme, iced::Renderer> {
+        let mut items: Vec<_> = self
+            .state
+            .profile_names()
+            .map(|name| {
+                menu::Item::new(
+                    row![
+                        menu_button(
+                            default_button_text(&name),
+                            (self.state.active_profile != name)
+                                .then(|| Message::SelectProfile(name.clone())),
+                        ),
+                        menu_icon(Bootstrap::Trash)
+                            .style(button::danger)
+                            .on_press_with(move || Message::Logout(
+                                name.clone()
+                            ))
+                    ]
+                    .spacing(4.0)
+                    .align_y(iced::alignment::Vertical::Center),
+                )
+            })
+            .collect();
+        items.push(menu::Item::new(
+            menu_text(&"Add new profile", Message::NewProfile).padding(
+                iced::Padding {
+                    left: 4.0,
+                    right: 4.0,
+                    top: 6.0,
+                    bottom: 4.0,
+                },
+            ),
+        ));
+
+        menu::Menu::new(items).max_width(200.0)
+    }
+
     fn week_total(
         &self,
     ) -> menu::Item<'_, Message, iced::Theme, iced::Renderer> {
+        let duration =
+            duration_to_hm(&self.state.current_profile().week_total());
         menu::Item::new(
             menu_button(
-                default_button_text(&format!(
-                    "Week total: {}",
-                    duration_to_hm(&self.state.week_total())
-                ))
-                .align_x(Horizontal::Right)
-                .width(iced::Length::Fill),
+                default_button_text(&format!("Week total: {duration}",))
+                    .align_x(Horizontal::Right)
+                    .width(iced::Length::Fill),
                 None,
             )
             .style(|theme, _| button::text(theme, button::Status::Active)),
@@ -631,7 +710,7 @@ impl App {
             .inspect(|task| total += task.duration)
             .flat_map(|task| {
                 vec![
-                    task.view(&self.state.projects)
+                    task.view(&self.state.current_profile().projects)
                         .map(Message::TimeEntryProxy),
                     horizontal_rule(0.5).into(),
                 ]
@@ -649,7 +728,7 @@ impl App {
             std::iter::once(
                 row!(
                     container(text(
-                        self.state.customization.format_date(start)
+                        self.state.customization().format_date(start)
                     ))
                     .align_left(iced::Length::Shrink)
                     .padding(Padding {
@@ -712,8 +791,8 @@ impl App {
         ])
     }
 
-    pub const fn theme(&self) -> iced::Theme {
-        if self.state.customization.dark_mode {
+    pub fn theme(&self) -> iced::Theme {
+        if self.state.customization().dark_mode {
             iced::Theme::Dracula
         } else {
             iced::Theme::Light
@@ -721,7 +800,7 @@ impl App {
     }
 }
 
-fn loading_message(error: &str) -> Element<'_, Message> {
+fn loading_message(error: &str, on_logout: Message) -> Element<'_, Message> {
     if error.is_empty() {
         center(text("Loading...").width(Fill).align_x(Center).size(48)).into()
     } else {
@@ -732,7 +811,7 @@ fn loading_message(error: &str) -> Element<'_, Message> {
                     .align_x(Center)
                     .size(24),
                 button("Log Out")
-                    .on_press(Message::Logout)
+                    .on_press(on_logout)
                     .style(button::secondary),
             ]
             .align_x(iced::Center)
