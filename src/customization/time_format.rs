@@ -34,8 +34,8 @@ impl std::fmt::Display for TimeFormat {
 impl TogglConvertible<String> for TimeFormat {
     fn to_toggl(&self) -> String {
         match self {
-            Self::H24 => "H:mm".to_string(),
-            Self::H12 => "h:mm A".to_string(),
+            Self::H24 => "H:mm".to_owned(),
+            Self::H12 => "h:mm A".to_owned(),
         }
     }
     fn from_toggl(value: &String) -> Self {

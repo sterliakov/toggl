@@ -6,7 +6,7 @@ pub struct WorkspaceId(u64);
 
 impl WorkspaceId {
     #[cfg(test)]
-    pub fn new(id: u64) -> Self {
+    pub const fn new(id: u64) -> Self {
         Self(id)
     }
 }

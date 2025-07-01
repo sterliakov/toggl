@@ -3,9 +3,10 @@ use iced::widget::{button, column, container, row, scrollable, text, Column};
 use iced::{keyboard, Element, Fill, Task as Command};
 use log::error;
 
-use crate::widgets::{close_button, icon_text, link};
+use crate::state::State;
+use crate::widgets::{close_button, icon_text, link, CustomWidget};
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct LegalInfo;
 
 #[derive(Clone, Debug)]
@@ -14,17 +15,13 @@ pub enum LegalInfoMessage {
     OpenLink(String),
 }
 
-impl LegalInfo {
-    pub fn new() -> Self {
-        Self {}
-    }
-
-    pub fn view(&self) -> Element<'_, LegalInfoMessage> {
+impl CustomWidget<LegalInfoMessage> for LegalInfo {
+    fn view(&self, _state: &State) -> iced::Element<'_, LegalInfoMessage> {
         let content = column![
             close_button(LegalInfoMessage::Close),
             column![
                 text("This client is MIT-licensed, you can find the full text of the license by following the link below:"),
-                link("License", "https://github.com/sterliakov/toggl/blob/master/LICENSE".to_string(), LegalInfoMessage::OpenLink),
+                link("License", "https://github.com/sterliakov/toggl/blob/master/LICENSE".to_owned(), LegalInfoMessage::OpenLink),
             ].spacing(4),
             column![
                 text("We do not share any information with third parties other than Toggl itself. By using this application you agree to comply with Toggl legal requirements:"),
@@ -39,12 +36,13 @@ impl LegalInfo {
         scrollable(container(content).center_x(Fill).padding(10)).into()
     }
 
-    pub fn update(
+    fn update(
         &mut self,
         message: LegalInfoMessage,
+        _state: &State,
     ) -> Command<LegalInfoMessage> {
         use LegalInfoMessage::*;
-        if let OpenLink(ref url) = message {
+        if let OpenLink(url) = &message {
             // TODO: open_browser would be better but refuses to work with FF on my PC
             if let Err(e) = opener::open(url) {
                 error!("Failed to open browser: {e:?}");
@@ -53,16 +51,19 @@ impl LegalInfo {
         Command::none()
     }
 
-    pub fn handle_key(
+    fn handle_key(
         &mut self,
         key: NamedKey,
         modifiers: keyboard::Modifiers,
-    ) -> Command<LegalInfoMessage> {
-        if matches!(key, NamedKey::Escape) && modifiers.is_empty() {
-            Command::done(LegalInfoMessage::Close)
-        } else {
-            Command::none()
-        }
+    ) -> Option<Command<LegalInfoMessage>> {
+        (matches!(key, NamedKey::Escape) && modifiers.is_empty())
+            .then(|| Command::done(LegalInfoMessage::Close))
+    }
+}
+
+impl LegalInfo {
+    pub const fn new() -> Self {
+        Self {}
     }
 }
 
@@ -81,7 +82,7 @@ fn bullet_link<'a>(
     name: &'a str,
     url: &'a str,
 ) -> button::Button<'a, LegalInfoMessage> {
-    link(name, url.to_string(), LegalInfoMessage::OpenLink).padding(
+    link(name, url.to_owned(), LegalInfoMessage::OpenLink).padding(
         iced::Padding {
             top: 2.0,
             ..iced::Padding::default()

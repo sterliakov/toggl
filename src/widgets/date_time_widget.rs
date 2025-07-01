@@ -1,15 +1,16 @@
-use chrono::{DateTime, Datelike, Local};
+use chrono::{DateTime, Datelike as _, Local};
 use iced::keyboard::key::Named as NamedKey;
 use iced::widget::{button, column, row, text, text_input};
-use iced::{Element, Task as Command};
+use iced::{keyboard, Element, Task as Command};
 use iced_aw::date_picker::Date;
 use iced_aw::time_picker::Time;
 use iced_aw::{DatePicker, TimePicker};
 use iced_fonts::Bootstrap;
 use log::warn;
 
-use super::icon_button;
+use super::{icon_button, CustomWidget};
 use crate::customization::Customization;
+use crate::state::State;
 
 #[derive(Clone, Debug)]
 pub enum DateTimeEditMessage {
@@ -36,28 +37,8 @@ pub struct DateTimeWidget {
     error: Option<String>,
 }
 
-impl DateTimeWidget {
-    pub fn new(
-        start: Option<DateTime<Local>>,
-        input_label: impl ToString,
-        input_id: impl ToString,
-        customization: &Customization,
-    ) -> Self {
-        Self {
-            input_label: input_label.to_string(),
-            input_id: input_id.to_string(),
-            dt: start,
-            full_text: customization.format_datetime(&start),
-            show_time_picker: false,
-            show_date_picker: false,
-            error: None,
-        }
-    }
-
-    pub fn view(
-        &self,
-        customization: &Customization,
-    ) -> Element<'_, DateTimeEditMessage> {
+impl CustomWidget<DateTimeEditMessage> for DateTimeWidget {
+    fn view(&self, state: &State) -> Element<'_, DateTimeEditMessage> {
         let ref_time = self.dt.unwrap_or_else(Local::now);
         column![row![
             text_input(&self.input_label, &self.full_text)
@@ -65,10 +46,97 @@ impl DateTimeWidget {
                 .on_input(DateTimeEditMessage::EditText)
                 .on_submit(DateTimeEditMessage::Finish),
             self.date_picker(ref_time),
-            self.time_picker(ref_time, customization),
+            self.time_picker(ref_time, &state.customization),
         ]]
         .push_maybe(self.error.clone().map(|e| text(e).style(text::danger)))
         .into()
+    }
+
+    fn update(
+        &mut self,
+        message: DateTimeEditMessage,
+        state: &State,
+    ) -> Command<DateTimeEditMessage> {
+        use DateTimeEditMessage::*;
+        let customization = &state.customization;
+
+        match message {
+            EditText(text) => {
+                if let Ok(Some(dt)) = customization.parse_datetime(&text) {
+                    self.dt = Some(dt);
+                    self.error = None;
+                } else {
+                    self.dt = None;
+                    self.error = Some("Invalid date".to_owned());
+                }
+                self.full_text = text;
+            }
+            OpenTimePicker => {
+                self.show_time_picker = true;
+            }
+            CloseTimePicker => {
+                self.show_time_picker = false;
+            }
+            SubmitTime(time) => {
+                self.dt = Some(with_time(self.dt, time, Local::now));
+                self.full_text =
+                    customization.format_datetime(self.dt.as_ref());
+                self.error = None;
+                self.show_time_picker = false;
+            }
+            OpenDatePicker => {
+                self.show_date_picker = true;
+            }
+            CloseDatePicker => {
+                self.show_date_picker = false;
+            }
+            SubmitDate(date) => {
+                self.dt = Some(with_date(self.dt, date, Local::now));
+                self.full_text =
+                    customization.format_datetime(self.dt.as_ref());
+                self.error = None;
+                self.show_date_picker = false;
+            }
+            Finish => {}
+        }
+        Command::none()
+    }
+
+    fn handle_key(
+        &mut self,
+        key: NamedKey,
+        _modifiers: keyboard::Modifiers,
+    ) -> Option<Command<DateTimeEditMessage>> {
+        //! Returns None if key press is not intended for this component
+        //! and command to run otherwise.
+        match (self.show_time_picker, self.show_date_picker, key) {
+            (true, false, NamedKey::Escape) => {
+                Some(Command::done(DateTimeEditMessage::CloseTimePicker))
+            }
+            (false, true, NamedKey::Escape) => {
+                Some(Command::done(DateTimeEditMessage::CloseDatePicker))
+            }
+            _ => None,
+        }
+    }
+}
+
+impl DateTimeWidget {
+    pub fn new(
+        start: Option<DateTime<Local>>,
+        input_label: &str,
+        input_id: &str,
+        customization: &Customization,
+    ) -> Self {
+        Self {
+            input_label: input_label.to_owned(),
+            input_id: input_id.to_owned(),
+            dt: start,
+            full_text: customization.format_datetime(start.as_ref()),
+            show_time_picker: false,
+            show_date_picker: false,
+            error: None,
+        }
     }
 
     fn time_picker(
@@ -111,75 +179,8 @@ impl DateTimeWidget {
         )
     }
 
-    pub fn update(
-        &mut self,
-        message: DateTimeEditMessage,
-        customization: &Customization,
-    ) -> Command<DateTimeEditMessage> {
-        use DateTimeEditMessage::*;
-
-        match message {
-            EditText(text) => {
-                if let Ok(Some(dt)) = customization.parse_datetime(&text) {
-                    self.dt = Some(dt);
-                    self.error = None;
-                } else {
-                    self.dt = None;
-                    self.error = Some("Invalid date".to_string());
-                }
-                self.full_text = text;
-            }
-            OpenTimePicker => {
-                self.show_time_picker = true;
-            }
-            CloseTimePicker => {
-                self.show_time_picker = false;
-            }
-            SubmitTime(time) => {
-                self.dt = Some(with_time(self.dt, time, Local::now));
-                self.full_text = customization.format_datetime(&self.dt);
-                self.error = None;
-                self.show_time_picker = false;
-            }
-            OpenDatePicker => {
-                self.show_date_picker = true;
-            }
-            CloseDatePicker => {
-                self.show_date_picker = false;
-            }
-            SubmitDate(date) => {
-                self.dt = Some(with_date(self.dt, date, Local::now));
-                self.full_text = customization.format_datetime(&self.dt);
-                self.error = None;
-                self.show_date_picker = false;
-            }
-            Finish => {}
-        };
-        Command::none()
-    }
-
-    pub fn handle_key(
-        &mut self,
-        key: NamedKey,
-    ) -> Option<Command<DateTimeEditMessage>> {
-        //! Returns None if key press is not intended for this component
-        //! and command to run otherwise.
-        match (self.show_time_picker, self.show_date_picker, key) {
-            (true, false, NamedKey::Escape) => {
-                Some(Command::done(DateTimeEditMessage::CloseTimePicker))
-            }
-            (false, true, NamedKey::Escape) => {
-                Some(Command::done(DateTimeEditMessage::CloseDatePicker))
-            }
-            _ => None,
-        }
-    }
-
     pub fn get_value(&self) -> Result<Option<DateTime<Local>>, String> {
-        match &self.error {
-            Some(e) => Err(e.clone()),
-            None => Ok(self.dt),
-        }
+        self.error.as_ref().map_or(Ok(self.dt), |e| Err(e.clone()))
     }
 }
 
@@ -197,6 +198,7 @@ fn with_time(
         })
 }
 
+#[expect(clippy::return_and_then)]
 fn with_date(
     dt: Option<DateTime<Local>>,
     date: Date,

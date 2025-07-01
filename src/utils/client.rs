@@ -17,7 +17,7 @@ impl Client {
     pub fn from_email_password(email: &str, password: &str) -> Self {
         Self {
             client: surf::Client::new()
-                .with(AuthMiddleware(email.to_string(), password.to_string())),
+                .with(AuthMiddleware(email.to_owned(), password.to_owned())),
         }
     }
 
@@ -27,20 +27,20 @@ impl Client {
 
     pub async fn check_status(res: &mut surf::Response) -> Result<()> {
         let status = res.status();
-        if !status.is_success() {
+        if status.is_success() {
+            info!("Received a successful response.");
+            Ok(())
+        } else {
             let binary = &res.body_bytes().await?;
             let msg = if binary.is_empty() {
                 error!("Received an unsuccessful response (empty body).");
                 status.to_string()
             } else {
-                let response_text = std::str::from_utf8(binary)?.to_string();
+                let response_text = std::str::from_utf8(binary)?.to_owned();
                 error!("Received an unsuccessful response (non-empty body: '{response_text}').");
                 response_text
             };
             Err(surf::Error::from_str(status, msg))
-        } else {
-            info!("Received a successful response.");
-            Ok(())
         }
     }
 }

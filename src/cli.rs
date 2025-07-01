@@ -1,4 +1,7 @@
-use std::io::{self, Write};
+#![allow(clippy::print_stderr)]
+#![allow(clippy::print_stdout)]
+
+use std::io::{self, Write as _};
 
 use clap::{Parser, Subcommand};
 
@@ -27,12 +30,12 @@ impl CliArgs {
     }
 
     async fn run_internal(&self) -> Option<()> {
-        match self.subcommand.as_ref().unwrap_or(&SubCommand::default()) {
-            SubCommand::SelfUpdate => {
+        match self.subcommand.as_ref() {
+            Some(SubCommand::SelfUpdate) => {
                 self.run_update().await;
                 Some(())
             }
-            SubCommand::Start => None,
+            None | Some(SubCommand::Start) => None,
         }
     }
 
@@ -56,7 +59,7 @@ impl CliArgs {
             Ok(UpdateStatus::Updated(version)) => {
                 println!("\ntoggl-track updated to {version}.");
             }
-        };
+        }
     }
 }
 

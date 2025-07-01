@@ -1,4 +1,20 @@
-use clap::{crate_version, Parser};
+#![deny(clippy::all, clippy::pedantic, clippy::nursery)]
+#![allow(clippy::unreadable_literal)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::unsafe_derive_deserialize)]
+#![deny(clippy::shadow_unrelated)]
+#![deny(clippy::str_to_string)]
+#![deny(clippy::unused_trait_names)]
+#![deny(clippy::print_stderr)]
+#![deny(clippy::print_stdout)]
+#![deny(clippy::filter_map_bool_then)]
+#![deny(clippy::if_then_some_else_none)]
+#![deny(clippy::return_and_then)]
+#![deny(clippy::ref_patterns)]
+
+use std::sync::LazyLock;
+
+use clap::{crate_version, Parser as _};
 use entities::Preferences;
 use iced::alignment::Horizontal;
 use iced::keyboard::key::Named as NamedKey;
@@ -7,8 +23,7 @@ use iced::widget::{
 };
 use iced::{keyboard, window, Center, Element, Fill, Padding, Task as Command};
 use iced_aw::menu;
-use itertools::Itertools;
-use lazy_static::lazy_static;
+use itertools::Itertools as _;
 use log::{debug, error, info};
 use screens::{LegalInfo, LegalInfoMessage};
 use state::{EntryEditAction, EntryEditInfo};
@@ -36,10 +51,10 @@ use crate::screens::{
 use crate::state::{State, StatePersistenceError};
 use crate::time_entry::{TimeEntry, TimeEntryMessage};
 use crate::updater::UpdateStep;
-use crate::utils::{duration_to_hms, Client, ExactModifiers};
+use crate::utils::{duration_to_hms, Client, ExactModifiers as _};
 use crate::widgets::{
     menu_select_item, menu_text, menu_text_disabled, top_level_menu_text,
-    RunningEntry, RunningEntryMessage,
+    CustomWidget as _, RunningEntry, RunningEntryMessage,
 };
 
 pub fn main() -> iced::Result {
@@ -77,7 +92,7 @@ struct App {
 }
 
 // There's one instance of this enum at a time, no need to box
-#[allow(clippy::large_enum_variant)]
+#[expect(clippy::large_enum_variant)]
 #[derive(Debug, Default)]
 enum Screen {
     #[default]
@@ -114,18 +129,18 @@ enum Message {
     OptimisticUpdate(EntryEditInfo),
 }
 
-lazy_static! {
-    static ref RUNNING_ICON: window::Icon = window::icon::from_file_data(
-        include_bytes!("../assets/icon.png"),
-        None
-    )
-    .expect("Icon must parse");
-    static ref DEFAULT_ICON: window::Icon = window::icon::from_file_data(
+static RUNNING_ICON: LazyLock<window::Icon> = LazyLock::new(|| {
+    window::icon::from_file_data(include_bytes!("../assets/icon.png"), None)
+        .expect("Icon must parse")
+});
+
+static DEFAULT_ICON: LazyLock<window::Icon> = LazyLock::new(|| {
+    window::icon::from_file_data(
         include_bytes!("../assets/icon-gray.png"),
-        None
+        None,
     )
-    .expect("Icon must parse");
-}
+    .expect("Icon must parse")
+});
 
 impl App {
     pub fn new() -> (Self, Command<Message>) {
@@ -140,9 +155,9 @@ impl App {
 
     pub fn title(&self) -> String {
         if self.state.running_entry.is_some() {
-            "* Toggl Tracker".to_string()
+            "* Toggl Tracker".to_owned()
         } else {
-            "Toggl Tracker".to_string()
+            "Toggl Tracker".to_owned()
         }
     }
 
@@ -155,13 +170,12 @@ impl App {
     }
 
     fn update_icon(&self) -> Command<Message> {
-        if let Some(id) = self.window_id {
+        self.window_id.map_or_else(Command::none, |id| {
             window::change_icon(id, self.icon())
-        } else {
-            Command::none()
-        }
+        })
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::WindowIdReceived(id) => {
@@ -169,13 +183,13 @@ impl App {
                 self.window_id = id;
                 if let Some(id) = id {
                     return window::change_icon(id, self.icon());
-                };
+                }
             }
             Message::DataFetched(state) => {
                 info!("Loaded initial data.");
-                if !matches!(&self.screen, Screen::Loaded(_)) {
-                    self.screen = Screen::Loaded(TemporaryState::default())
-                };
+                if !matches!(self.screen, Screen::Loaded(_)) {
+                    self.screen = Screen::Loaded(TemporaryState::default());
+                }
                 self.state = self.state.clone().update_from_context(state);
                 let mut steps = vec![self.save_state(), self.update_icon()];
                 if !self.state.has_whole_last_week() {
@@ -207,14 +221,14 @@ impl App {
                 self.screen = Screen::Legal(LegalInfo::new());
             }
             Message::OptimisticUpdate(change) => {
-                return if self.state.apply_change(change).is_err() {
+                return if self.state.apply_change(&change).is_err() {
                     Command::done(Message::Reload)
                 } else {
                     Command::batch(vec![self.update_icon(), self.save_state()])
                 }
             }
             _ => {}
-        };
+        }
 
         match &mut self.screen {
             Screen::Loading => match message {
@@ -246,13 +260,15 @@ impl App {
                     ));
                 }
                 Message::LoginProxy(msg) => {
-                    return screen.update(msg).map(Message::LoginProxy)
+                    return screen
+                        .update(msg, &self.state)
+                        .map(Message::LoginProxy)
                 }
                 _ => {}
             },
             Screen::Loaded(temp_state) => match message {
                 Message::TimeEntryProxy(TimeEntryMessage::Edit(e)) => {
-                    self.begin_edit(e.clone());
+                    self.begin_edit(e);
                 }
                 Message::TimeEntryProxy(TimeEntryMessage::Duplicate(e)) => {
                     let token = self.state.api_token.clone();
@@ -266,14 +282,14 @@ impl App {
                                     entry: new_entry,
                                 })
                             }
-                            Err(e) => Message::Error(e.to_string()),
+                            Err(err) => Message::Error(err.to_string()),
                         }
                     });
                 }
 
                 Message::RunningEntryProxy(inner) => match inner {
                     RunningEntryMessage::StartEditing(entry) => {
-                        self.begin_edit(*entry.clone());
+                        self.begin_edit(*entry);
                     }
                     RunningEntryMessage::Error(err) => {
                         return Command::done(Message::Error(err));
@@ -370,13 +386,15 @@ impl App {
                 }
                 Message::EditTimeEntryProxy(msg) => {
                     return screen
-                        .update(msg, &self.state.customization)
+                        .update(msg, &self.state)
                         .map(Message::EditTimeEntryProxy)
                 }
                 Message::KeyPressed(key, m) => {
                     return screen
                         .handle_key(key, m)
-                        .map(Message::EditTimeEntryProxy)
+                        .map_or_else(Command::none, |t| {
+                            t.map(Message::EditTimeEntryProxy)
+                        })
                 }
                 _ => {}
             },
@@ -385,14 +403,20 @@ impl App {
                     return self.load_entries();
                 }
                 Message::LegalProxy(msg) => {
-                    return screen.update(msg).map(Message::LegalProxy)
+                    return screen
+                        .update(msg, &self.state)
+                        .map(Message::LegalProxy)
                 }
                 Message::KeyPressed(key, m) => {
-                    return screen.handle_key(key, m).map(Message::LegalProxy)
+                    return screen
+                        .handle_key(key, m)
+                        .map_or_else(Command::none, |t| {
+                            t.map(Message::LegalProxy)
+                        })
                 }
                 _ => {}
             },
-        };
+        }
         Command::none()
     }
 
@@ -404,7 +428,7 @@ impl App {
         let state = self.state.clone();
         Command::future(async move {
             match state.save_customization().await {
-                Ok(_) => Message::Discarded,
+                Ok(()) => Message::Discarded,
                 Err(e) => Message::Error(e.to_string()),
             }
         })
@@ -421,7 +445,9 @@ impl App {
     pub fn view(&self) -> Element<'_, Message> {
         match &self.screen {
             Screen::Loading => loading_message(&self.error),
-            Screen::Unauthed(screen) => screen.view().map(Message::LoginProxy),
+            Screen::Unauthed(screen) => {
+                screen.view(&self.state).map(Message::LoginProxy)
+            }
             Screen::Loaded(temp_state) => {
                 let content = column(
                     self.state
@@ -433,11 +459,11 @@ impl App {
                 )
                 .push(
                     row![button("Load more")
-                        .on_press_maybe(if self.state.has_more_entries {
-                            Some(Message::LoadMore)
-                        } else {
-                            None
-                        })
+                        .on_press_maybe(
+                            self.state
+                                .has_more_entries
+                                .then_some(Message::LoadMore)
+                        )
                         .style(button::secondary)]
                     .padding([10, 10]),
                 );
@@ -473,10 +499,12 @@ impl App {
                 .center_x(Fill)
                 .into()
             }
-            Screen::EditEntry(screen) => screen
-                .view(&self.state.customization)
-                .map(Message::EditTimeEntryProxy),
-            Screen::Legal(screen) => screen.view().map(Message::LegalProxy),
+            Screen::EditEntry(screen) => {
+                screen.view(&self.state).map(Message::EditTimeEntryProxy)
+            }
+            Screen::Legal(screen) => {
+                screen.view(&self.state).map(Message::LegalProxy)
+            }
         }
     }
 
@@ -488,7 +516,7 @@ impl App {
                 .iter()
                 .map(|ws| {
                     menu_select_item(
-                        ws.name.clone(),
+                        &ws.name.clone(),
                         selected_ws == Some(ws.id),
                         Message::SelectWorkspace(ws.id),
                     )
@@ -500,7 +528,7 @@ impl App {
         let selected_project = self.state.default_project;
         let project_menu = menu::Menu::new(
             std::iter::once(menu_select_item(
-                "None",
+                &"None",
                 selected_project.is_none(),
                 Message::SelectProject(None),
             ))
@@ -517,24 +545,24 @@ impl App {
 
         menu::MenuBar::new(vec![
             menu::Item::with_menu(
-                top_level_menu_text("Info", Message::Discarded),
+                top_level_menu_text(&"Info", Message::Discarded),
                 menu::Menu::new(vec![
-                    menu::Item::new(menu_text("Reload", Message::Reload)),
+                    menu::Item::new(menu_text(&"Reload", Message::Reload)),
                     menu::Item::with_menu(
-                        menu_text("Workspaces", Message::Discarded),
+                        menu_text(&"Workspaces", Message::Discarded),
                         ws_menu,
                     ),
                     menu::Item::with_menu(
-                        menu_text("Projects", Message::Discarded),
+                        menu_text(&"Projects", Message::Discarded),
                         project_menu,
                     ),
                     menu::Item::new(menu_text(
-                        "Legal info",
+                        &"Legal info",
                         Message::OpenLegalScreen,
                     )),
-                    menu::Item::new(menu_text("Log out", Message::Logout)),
+                    menu::Item::new(menu_text(&"Log out", Message::Logout)),
                     menu::Item::new(
-                        menu_text_disabled(format!(
+                        menu_text_disabled(&format!(
                             "Version: {}",
                             crate_version!()
                         ))
@@ -579,7 +607,7 @@ impl App {
     ) -> menu::Item<'_, Message, iced::Theme, iced::Renderer> {
         menu::Item::new(
             menu_button(
-                default_button_text(format!(
+                default_button_text(&format!(
                     "Week total: {}",
                     duration_to_hm(&self.state.week_total())
                 ))
@@ -596,6 +624,8 @@ impl App {
         start: chrono::NaiveDate,
         tasks: impl Iterator<Item = &'a TimeEntry>,
     ) -> Element<'a, Message> {
+        const TOP_OFFSET: f32 = 8.0;
+
         let mut total = 0i64;
         let tasks_rendered: Vec<_> = tasks
             .inspect(|task| total += task.duration)
@@ -607,7 +637,6 @@ impl App {
                 ]
             })
             .collect();
-        const TOP_OFFSET: f32 = 8.0;
         let summary_container_style = |theme: &iced::Theme| {
             let color = theme.extended_palette().secondary.weak;
             container::Style {
@@ -620,7 +649,7 @@ impl App {
             std::iter::once(
                 row!(
                     container(text(
-                        self.state.customization.format_date(&start)
+                        self.state.customization.format_date(start)
                     ))
                     .align_left(iced::Length::Shrink)
                     .padding(Padding {
@@ -661,7 +690,7 @@ impl App {
         }
     }
 
-    pub fn subscription(&self) -> iced::Subscription<Message> {
+    pub fn subscription(_self: &Self) -> iced::Subscription<Message> {
         use iced::keyboard::{on_key_press, Key};
         iced::Subscription::batch(vec![
             iced::time::every(std::time::Duration::from_secs(1))
@@ -683,7 +712,7 @@ impl App {
         ])
     }
 
-    pub fn theme(&self) -> iced::Theme {
+    pub const fn theme(&self) -> iced::Theme {
         if self.state.customization.dark_mode {
             iced::Theme::Dracula
         } else {

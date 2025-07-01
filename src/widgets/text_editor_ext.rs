@@ -1,10 +1,11 @@
-use iced::advanced::text::highlighter::PlainText;
-use iced::keyboard;
 use iced::keyboard::key::Named as NamedKey;
 use iced::widget::text_editor;
-use iced::widget::text_editor::{Action, Binding, Content, Motion, TextEditor};
+use iced::widget::text_editor::{Action, Binding, Content, Motion};
+use iced::{keyboard, Task as Command};
 
-use crate::utils::ExactModifiers;
+use super::CustomWidget;
+use crate::state::State;
+use crate::utils::ExactModifiers as _;
 
 #[derive(Debug)]
 pub struct TextEditorExt {
@@ -22,11 +23,10 @@ struct EditorHistory {
 }
 
 impl TextEditorExt {
-    pub fn new(text: &Option<impl ToString>) -> Self {
+    pub fn new(text: Option<&impl ToString>) -> Self {
         let original_text = text
-            .as_ref()
-            .map(|s| s.to_string())
-            .unwrap_or("".to_string());
+            .map(std::string::ToString::to_string)
+            .unwrap_or_default();
         Self {
             content: Content::with_text(&original_text),
             history: vec![],
@@ -41,8 +41,8 @@ pub enum TextEditorMessage {
     Undo,
 }
 
-impl TextEditorExt {
-    pub fn view<'a>(&'a self) -> TextEditor<'a, PlainText, TextEditorMessage> {
+impl CustomWidget<TextEditorMessage> for TextEditorExt {
+    fn view(&self, _state: &State) -> iced::Element<'_, TextEditorMessage> {
         text_editor(&self.content)
             .key_binding(|press| {
                 if !matches!(press.status, text_editor::Status::Focused) {
@@ -91,17 +91,22 @@ impl TextEditorExt {
                 }
             })
             .on_action(TextEditorMessage::Original)
+            .into()
     }
 
-    pub fn update(&mut self, action: TextEditorMessage) {
+    fn update(
+        &mut self,
+        message: TextEditorMessage,
+        _state: &State,
+    ) -> Command<TextEditorMessage> {
         use TextEditorMessage::*;
 
-        match action {
+        match message {
             Undo => {
                 let mut step_to_undo: EditorHistory;
                 loop {
                     let Some(entry) = self.history.pop() else {
-                        return;
+                        return Command::none();
                     };
                     if entry.action.is_edit() {
                         step_to_undo = entry;
@@ -148,14 +153,17 @@ impl TextEditorExt {
                 self.content.perform(action);
             }
         }
+        Command::none()
     }
+}
 
+impl TextEditorExt {
     pub fn get_value(&self) -> String {
         self.content.text()
     }
 }
 
-fn is_select(action: &Action) -> bool {
+const fn is_select(action: &Action) -> bool {
     matches!(
         action,
         Action::Select(_)

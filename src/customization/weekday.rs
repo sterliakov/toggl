@@ -45,7 +45,7 @@ impl WeekDay {
 
 #[cfg(test)]
 mod test {
-    use super::{TogglConvertible, WeekDay};
+    use super::{TogglConvertible as _, WeekDay};
 
     #[test]
     fn test_conversion() {

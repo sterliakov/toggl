@@ -28,7 +28,7 @@ impl fmt::Display for InstallationMethod {
 }
 
 impl InstallationMethod {
-    pub fn can_be_updated(&self) -> bool {
+    pub const fn can_be_updated(&self) -> bool {
         matches!(self, Self::Unknown)
     }
 }
@@ -67,7 +67,7 @@ pub async fn has_updates() -> Result<bool, UpdateError> {
 }
 
 #[cfg(unix)]
-fn archive_ident() -> &'static str {
+const fn archive_ident() -> &'static str {
     ".tar.gz"
 }
 
@@ -158,32 +158,25 @@ impl UpdateStep {
 
     pub fn view(
         &self,
-    ) -> button::Button<'_, UpdateStep, iced::Theme, iced::Renderer> {
+    ) -> button::Button<'_, Self, iced::Theme, iced::Renderer> {
         match self {
-            UpdateStep::NotStarted => {
-                menu_text("Check for updates", UpdateStep::Checking)
-            }
-            UpdateStep::Checking => {
-                menu_text_disabled("Checking for updates...")
-            }
-            UpdateStep::UpToDate => menu_text_disabled("Up to date."),
-            UpdateStep::MaybeUnsupported(method) => menu_text(
-                format!("Use {method} to update. Click again to force update"),
-                UpdateStep::Running,
+            Self::NotStarted => menu_text(&"Check for updates", Self::Checking),
+            Self::Checking => menu_text_disabled(&"Checking for updates..."),
+            Self::UpToDate => menu_text_disabled(&"Up to date."),
+            Self::MaybeUnsupported(method) => menu_text(
+                &format!("Use {method} to update. Click again to force update"),
+                Self::Running,
             )
             .style(button::danger),
-            UpdateStep::UpdateAvailable => menu_text(
-                "Update available, click to update",
-                UpdateStep::Running,
-            ),
-            UpdateStep::Running => {
-                menu_text_disabled("Installing the update...")
+            Self::UpdateAvailable => {
+                menu_text(&"Update available, click to update", Self::Running)
             }
-            UpdateStep::Success => {
-                menu_text_disabled("Updated, please restart the application.")
+            Self::Running => menu_text_disabled(&"Installing the update..."),
+            Self::Success => {
+                menu_text_disabled(&"Updated, please restart the application.")
             }
-            UpdateStep::Error => {
-                menu_text_disabled("Failed to update.").style(button::danger)
+            Self::Error => {
+                menu_text_disabled(&"Failed to update.").style(button::danger)
             }
         }
     }

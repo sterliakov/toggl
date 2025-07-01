@@ -86,7 +86,7 @@ impl State {
             default_project: project_id,
             earliest_entry_time,
             customization: self.customization.update_from_preferences(
-                me.preferences.with_beginning_of_week(me.beginning_of_week),
+                &me.preferences.with_beginning_of_week(me.beginning_of_week),
             ),
             ..self
         }
@@ -96,23 +96,18 @@ impl State {
         if !self.has_more_entries {
             return true;
         }
-        match self.earliest_entry_time {
-            Some(time) => {
-                time < self.customization.to_start_of_week(Local::now())
-            }
-            None => true,
-        }
+        self.earliest_entry_time.is_none_or(|time| {
+            time < self.customization.to_start_of_week(Local::now())
+        })
     }
 
     pub fn add_entries(&mut self, entries: impl Iterator<Item = TimeEntry>) {
-        let mut earliest = None;
+        let mut earliest: Option<DateTime<Local>> = None;
         self.time_entries.extend(
             entries
                 .inspect(|e| {
-                    earliest = match earliest {
-                        None => Some(e.start),
-                        Some(v) => Some(v.min(e.start)),
-                    }
+                    earliest = earliest
+                        .map_or(Some(e.start), |v| Some(v.min(e.start)));
                 })
                 .filter(|e| Some(e.workspace_id) == self.default_workspace),
         );
@@ -125,18 +120,12 @@ impl State {
         let old = self
             .time_entries
             .iter()
-            .filter_map(|e| {
-                if e.start >= mon {
-                    Some(e.get_duration())
-                } else {
-                    None
-                }
-            })
+            .filter(|&e| (e.start >= mon))
+            .map(super::time_entry::TimeEntry::get_duration)
             .sum();
-        match &self.running_entry {
-            None => old,
-            Some(e) => old + e.get_duration(),
-        }
+        self.running_entry
+            .as_ref()
+            .map_or(old, |e| old + e.get_duration())
     }
 
     fn sort_entries(&mut self) {
@@ -144,10 +133,10 @@ impl State {
             .sort_by_key(|e| std::cmp::Reverse(e.start));
     }
 
-    pub fn apply_change(&mut self, change: EntryEditInfo) -> Result<(), ()> {
+    pub fn apply_change(&mut self, change: &EntryEditInfo) -> Result<(), ()> {
         //! Apply an optimistic update.
         //!
-        //! If Ok(), the changes are unambiguous. Otherwise a full resync
+        //! If `Ok()`, the changes are unambiguous. Otherwise a full resync
         //! should be performed.
 
         match change.action {
@@ -176,6 +165,7 @@ impl State {
                 self.time_entries.retain(|e| e.id != change.entry.id);
                 Ok(())
             }
+            #[expect(clippy::pattern_type_mismatch)]
             EntryEditAction::Update => {
                 match (&self.running_entry, change.entry.stop) {
                     (None, None) => {
@@ -189,13 +179,12 @@ impl State {
                             // Current running entry edited.
                             self.running_entry = Some(change.entry.clone());
                             return Ok(());
-                        } else {
-                            // Edited to make an entry running while another entry
-                            // was running. Back to the server - previous entry
-                            // was stopped when a new one was submitted, but we
-                            // don't know exact time.
-                            return Err(());
                         }
+                        // Edited to make an entry running while another entry
+                        // was running. Back to the server - previous entry
+                        // was stopped when a new one was submitted, but we
+                        // don't know exact time.
+                        return Err(());
                     }
                     (Some(old), Some(_)) if old.id == change.entry.id => {
                         // Entry stopped
@@ -207,7 +196,7 @@ impl State {
                     _ => {}
                 }
                 // In all other cases the edit should belong to some old entry
-                for e in self.time_entries.iter_mut() {
+                for e in &mut self.time_entries {
                     if e.id == change.entry.id {
                         change.entry.clone_into(e);
                         self.sort_entries();
@@ -224,16 +213,12 @@ impl State {
 
 impl State {
     fn path() -> std::path::PathBuf {
-        let mut path = if let Some(project_dirs) =
-            directories_next::ProjectDirs::from("rs", "Iced", "toggl-tracker")
-        {
-            project_dirs.data_dir().into()
-        } else {
-            std::env::current_dir().unwrap_or_default()
-        };
-
-        path.push("toggl.json");
-        path
+        directories_next::ProjectDirs::from("rs", "Iced", "toggl-tracker")
+            .map_or_else(
+                || std::env::current_dir().unwrap_or_default(),
+                |project_dirs| project_dirs.data_dir().into(),
+            )
+            .join("toggl.json")
     }
 
     pub async fn load() -> Result<Box<Self>, StatePersistenceError> {
@@ -287,7 +272,7 @@ impl State {
                 error!("Failed to write state to the file: {e}");
                 StatePersistenceError::FileSystem
             })?;
-        }
+        };
 
         Ok(())
     }
@@ -311,6 +296,8 @@ impl State {
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::shadow_unrelated)]
+
     use chrono::{Duration, Local, TimeDelta};
 
     use super::State;
@@ -385,7 +372,7 @@ mod test {
         };
         let me = ExtendedMe {
             projects: vec![],
-            workspaces: vec![ws.clone()],
+            workspaces: vec![ws],
             tags: vec![],
             time_entries: vec![e.clone()],
             beginning_of_week: 0,
@@ -487,23 +474,22 @@ mod test_updates {
         duration: Option<i64>,
         id: u64,
     ) -> TimeEntry {
-        if let Some(duration) = duration {
-            TimeEntry {
-                start: now - TimeDelta::minutes(start),
-                stop: Some(now - TimeDelta::minutes(start - duration)),
-                duration: duration * 60,
-                id,
-                ..TimeEntry::default()
-            }
-        } else {
-            TimeEntry {
+        duration.map_or_else(
+            || TimeEntry {
                 start: now - TimeDelta::minutes(start),
                 stop: None,
                 duration: -1,
                 id,
                 ..TimeEntry::default()
-            }
-        }
+            },
+            |duration| TimeEntry {
+                start: now - TimeDelta::minutes(start),
+                stop: Some(now - TimeDelta::minutes(start - duration)),
+                duration: duration * 60,
+                id,
+                ..TimeEntry::default()
+            },
+        )
     }
 
     #[test]
@@ -519,7 +505,7 @@ mod test_updates {
             };
 
             assert!(state
-                .apply_change(EntryEditInfo {
+                .apply_change(&EntryEditInfo {
                     action: EntryEditAction::Update,
                     entry: entry(now, 21, Some(10), 1),
                 })
@@ -529,7 +515,7 @@ mod test_updates {
             assert_eq!(state.running_entry, running_entry);
 
             assert!(state
-                .apply_change(EntryEditInfo {
+                .apply_change(&EntryEditInfo {
                     action: EntryEditAction::Delete,
                     entry: entry(now, 21, Some(10), 1),
                 })
@@ -538,7 +524,7 @@ mod test_updates {
             assert_eq!(state.time_entries.len(), 0);
 
             assert!(state
-                .apply_change(EntryEditInfo {
+                .apply_change(&EntryEditInfo {
                     action: EntryEditAction::Create,
                     entry: entry(now, 21, Some(10), 1),
                 })
@@ -548,7 +534,7 @@ mod test_updates {
             assert_eq!(state.running_entry, running_entry);
 
             // Make it running again, conflicts if already running
-            let res = state.apply_change(EntryEditInfo {
+            let res = state.apply_change(&EntryEditInfo {
                 action: EntryEditAction::Update,
                 entry: entry(now, 21, None, 1),
             });
@@ -573,7 +559,7 @@ mod test_updates {
         };
 
         assert!(state
-            .apply_change(EntryEditInfo {
+            .apply_change(&EntryEditInfo {
                 action: EntryEditAction::Update,
                 entry: entry(now, 12, None, 2),
             })
@@ -583,7 +569,7 @@ mod test_updates {
         assert_eq!(state.running_entry, Some(entry(now, 12, None, 2)));
 
         assert!(state
-            .apply_change(EntryEditInfo {
+            .apply_change(&EntryEditInfo {
                 action: EntryEditAction::Update,
                 entry: entry(now, 11, Some(1), 2),
             })
@@ -604,7 +590,7 @@ mod test_updates {
         };
 
         assert!(state
-            .apply_change(EntryEditInfo {
+            .apply_change(&EntryEditInfo {
                 action: EntryEditAction::Delete,
                 entry: entry(now, 12, None, 2),
             })
@@ -614,7 +600,7 @@ mod test_updates {
         assert_eq!(state.running_entry, None);
 
         assert!(state
-            .apply_change(EntryEditInfo {
+            .apply_change(&EntryEditInfo {
                 action: EntryEditAction::Create,
                 entry: entry(now, 11, None, 2),
             })
@@ -624,7 +610,7 @@ mod test_updates {
         assert_eq!(state.running_entry, Some(entry(now, 11, None, 2)));
 
         assert!(state
-            .apply_change(EntryEditInfo {
+            .apply_change(&EntryEditInfo {
                 action: EntryEditAction::Create,
                 entry: entry(now, 11, None, 3),
             })

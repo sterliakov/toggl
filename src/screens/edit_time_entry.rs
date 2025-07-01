@@ -4,13 +4,12 @@ use iced::widget::{
 };
 use iced::{keyboard, Element, Fill, Length, Task as Command};
 
-use crate::customization::Customization;
 use crate::entities::MaybeProject;
 use crate::state::{EntryEditAction, EntryEditInfo, State};
 use crate::time_entry::TimeEntry;
-use crate::utils::{Client, ExactModifiers};
+use crate::utils::{Client, ExactModifiers as _};
 use crate::widgets::{
-    close_button, DateTimeEditMessage, DateTimeWidget, TagEditor,
+    close_button, CustomWidget, DateTimeEditMessage, DateTimeWidget, TagEditor,
     TagEditorMessage, TextEditorExt, TextEditorMessage,
 };
 
@@ -41,58 +40,20 @@ pub enum EditTimeEntryMessage {
     Error(String),
 }
 
-impl EditTimeEntry {
-    pub fn new(entry: TimeEntry, state: &State) -> Self {
-        let description = entry.description.clone();
-        let start_dt = DateTimeWidget::new(
-            Some(entry.start),
-            "Start",
-            "start-input",
-            &state.customization,
-        );
-        let stop_dt = DateTimeWidget::new(
-            entry.stop,
-            "Stop",
-            "stop-input",
-            &state.customization,
-        );
-        let selected_project = entry.project(&state.projects);
-        let projects: Vec<MaybeProject> = std::iter::once(MaybeProject::None)
-            .chain(state.projects.iter().cloned().map(|p| p.into()))
-            .collect();
-        let tags = entry.tags.clone();
-        Self {
-            entry,
-            api_token: state.api_token.clone(),
-            description_editor: TextEditorExt::new(&description),
-            start_dt,
-            stop_dt,
-            error: None,
-            projects,
-            selected_project,
-            tag_editor: TagEditor::new(
-                state.tags.iter().map(|t| t.name.clone()).collect(),
-                tags,
-            ),
-        }
-    }
-
-    pub fn view(
-        &self,
-        customization: &Customization,
-    ) -> Element<'_, EditTimeEntryMessage> {
-        use std::borrow::Borrow;
+impl CustomWidget<EditTimeEntryMessage> for EditTimeEntry {
+    fn view(&self, state: &State) -> Element<'_, EditTimeEntryMessage> {
+        use std::borrow::Borrow as _;
 
         let content = column![
             close_button(EditTimeEntryMessage::Abort),
-            Element::from(self.description_editor.view())
+            Element::from(self.description_editor.view(state))
                 .map(EditTimeEntryMessage::DescriptionEdited),
             row![
                 self.start_dt
-                    .view(customization)
+                    .view(state)
                     .map(EditTimeEntryMessage::StartEdited),
                 self.stop_dt
-                    .view(customization)
+                    .view(state)
                     .map(EditTimeEntryMessage::StopEdited),
             ]
             .spacing(20),
@@ -108,10 +69,12 @@ impl EditTimeEntry {
                         base.background = p.parsed_color().into();
                     }
                     MaybeProject::None => {}
-                };
+                }
                 base
             }),
-            self.tag_editor.view().map(EditTimeEntryMessage::TagsEdited),
+            self.tag_editor
+                .view(state)
+                .map(EditTimeEntryMessage::TagsEdited),
             row![
                 button("Save")
                     .on_press(EditTimeEntryMessage::Submit)
@@ -130,35 +93,32 @@ impl EditTimeEntry {
         scrollable(container(content).center_x(Fill).padding(10)).into()
     }
 
-    pub fn update(
+    fn update(
         &mut self,
         message: EditTimeEntryMessage,
-        customization: &Customization,
+        state: &State,
     ) -> Command<EditTimeEntryMessage> {
         use EditTimeEntryMessage::*;
 
         match message {
             DescriptionEdited(action) => {
-                self.description_editor.update(action);
+                return self
+                    .description_editor
+                    .update(action, state)
+                    .map(DescriptionEdited);
             }
             TagsEdited(action) => {
-                self.tag_editor.update(action);
+                return self.tag_editor.update(action, state).map(TagsEdited);
             }
             StartEdited(DateTimeEditMessage::Finish)
             | StopEdited(DateTimeEditMessage::Finish) => {
                 return Command::done(Submit);
             }
             StartEdited(start) => {
-                return self
-                    .start_dt
-                    .update(start, customization)
-                    .map(StartEdited)
+                return self.start_dt.update(start, state).map(StartEdited)
             }
             StopEdited(stop) => {
-                return self
-                    .stop_dt
-                    .update(stop, customization)
-                    .map(StartEdited)
+                return self.stop_dt.update(stop, state).map(StartEdited)
             }
             ProjectSelected(p) => {
                 self.entry.project_id = p.id();
@@ -169,26 +129,26 @@ impl EditTimeEntry {
                     Err(e) => return Command::done(Error(e)),
                     Ok(None) => {
                         return Command::done(Error(
-                            "Start cannot be blank".to_string(),
+                            "Start cannot be blank".to_owned(),
                         ))
                     }
                     Ok(Some(date)) => self.entry.start = date,
-                };
+                }
                 match self.stop_dt.get_value() {
                     Ok(stop) => self.entry.stop = stop,
                     Err(e) => {
                         return Command::done(Error(e));
                     }
-                };
+                }
                 let duration = self
                     .entry
                     .stop
                     .map(|stop| (stop - self.entry.start).num_seconds());
                 if duration.unwrap_or(1) < 0 {
                     return Command::done(Error(
-                        "Start must come before end!".to_string(),
+                        "Start must come before end!".to_owned(),
                     ));
-                };
+                }
                 self.entry.duration = duration.unwrap_or(-1);
                 self.entry.description =
                     Some(self.description_editor.get_value());
@@ -204,32 +164,68 @@ impl EditTimeEntry {
                     self.api_token.clone(),
                 ));
             }
-            Abort => {}
-            Completed(_) => {}
+            Abort | Completed(_) => {}
             Error(err) => {
                 self.error = Some(err);
             }
-        };
+        }
         Command::none()
     }
 
-    pub fn handle_key(
+    fn handle_key(
         &mut self,
         key: NamedKey,
         modifiers: keyboard::Modifiers,
-    ) -> Command<EditTimeEntryMessage> {
-        if let Some(c) = self.start_dt.handle_key(key) {
-            c.map(EditTimeEntryMessage::StartEdited)
-        } else if let Some(c) = self.stop_dt.handle_key(key) {
-            c.map(EditTimeEntryMessage::StopEdited)
+    ) -> Option<Command<EditTimeEntryMessage>> {
+        if let Some(c) = self.start_dt.handle_key(key, modifiers) {
+            Some(c.map(EditTimeEntryMessage::StartEdited))
+        } else if let Some(c) = self.stop_dt.handle_key(key, modifiers) {
+            Some(c.map(EditTimeEntryMessage::StopEdited))
         } else if matches!(key, NamedKey::Enter)
             && modifiers.is_exact_ctrl_or_cmd()
         {
-            Command::done(EditTimeEntryMessage::Submit)
+            Some(Command::done(EditTimeEntryMessage::Submit))
         } else if matches!(key, NamedKey::Escape) && modifiers.is_empty() {
-            Command::done(EditTimeEntryMessage::Abort)
+            Some(Command::done(EditTimeEntryMessage::Abort))
         } else {
-            Command::none()
+            Some(Command::none())
+        }
+    }
+}
+
+impl EditTimeEntry {
+    pub fn new(entry: TimeEntry, state: &State) -> Self {
+        let description = entry.description.clone();
+        let start_dt = DateTimeWidget::new(
+            Some(entry.start),
+            "Start",
+            "start-input",
+            &state.customization,
+        );
+        let stop_dt = DateTimeWidget::new(
+            entry.stop,
+            "Stop",
+            "stop-input",
+            &state.customization,
+        );
+        let selected_project = entry.project(&state.projects);
+        let projects: Vec<MaybeProject> = std::iter::once(MaybeProject::None)
+            .chain(state.projects.iter().cloned().map(std::convert::Into::into))
+            .collect();
+        let tags = entry.tags.clone();
+        Self {
+            entry,
+            api_token: state.api_token.clone(),
+            description_editor: TextEditorExt::new(description.as_ref()),
+            start_dt,
+            stop_dt,
+            error: None,
+            projects,
+            selected_project,
+            tag_editor: TagEditor::new(
+                state.tags.iter().map(|t| t.name.clone()).collect(),
+                tags,
+            ),
         }
     }
 

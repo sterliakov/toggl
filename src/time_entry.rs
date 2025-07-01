@@ -16,6 +16,7 @@ fn datetime_serialize_utc<S: Serializer>(
     x.to_utc().serialize(s)
 }
 
+#[expect(clippy::ref_option)]
 fn maybe_datetime_serialize_utc<S: Serializer>(
     x: &Option<DateTime<Local>>,
     s: S,
@@ -67,7 +68,7 @@ impl TimeEntry {
     }
 
     pub fn split_running(all_entries: Vec<Self>) -> (Option<Self>, Vec<Self>) {
-        match &all_entries[..] {
+        match &*all_entries {
             [] => (None, vec![]),
             [head, rest @ ..] => {
                 if head.duration < 0 {
@@ -79,7 +80,7 @@ impl TimeEntry {
         }
     }
 
-    pub async fn save(&self, client: &Client) -> NetResult<TimeEntry> {
+    pub async fn save(&self, client: &Client) -> NetResult<Self> {
         #[derive(Serialize)]
         struct UpdateRequest<'a> {
             #[serde(flatten)]
@@ -105,9 +106,12 @@ impl TimeEntry {
         res.body_json().await
     }
 
-    pub async fn stop(&self, client: &Client) -> NetResult<TimeEntry> {
+    pub async fn stop(&self, client: &Client) -> NetResult<Self> {
         debug!("Stopping a time entry {}...", self.id);
-        assert!(self.stop.is_none());
+        assert!(
+            self.stop.is_none(),
+            "Attempted to stop an already stopped entry"
+        );
         let mut res = client
             .patch(format!(
                 "{}/api/v9/workspaces/{}/time_entries/{}/stop",
@@ -140,10 +144,10 @@ impl TimeEntry {
         workspace_id: WorkspaceId,
         project_id: Option<ProjectId>,
         client: &Client,
-    ) -> NetResult<TimeEntry> {
+    ) -> NetResult<Self> {
         debug!("Creating a time entry...");
         let entry = CreateTimeEntry {
-            created_with: "ST-Toggl-Client".to_string(),
+            created_with: "ST-Toggl-Client".to_owned(),
             description,
             duration: -1,
             start: Local::now(),
@@ -163,7 +167,7 @@ impl TimeEntry {
         res.body_json().await
     }
 
-    pub async fn duplicate(self, client: &Client) -> NetResult<TimeEntry> {
+    pub async fn duplicate(self, client: &Client) -> NetResult<Self> {
         Self::create_running(
             self.description,
             self.workspace_id,
@@ -213,7 +217,7 @@ impl TimeEntry {
     pub fn description_text(&self) -> String {
         self.description
             .clone()
-            .unwrap_or_else(|| "<NO DESCRIPTION>".to_string())
+            .unwrap_or_else(|| "<NO DESCRIPTION>".to_owned())
     }
 
     pub fn view(&self, projects: &[Project]) -> Element<'_, TimeEntryMessage> {
@@ -249,6 +253,8 @@ impl TimeEntry {
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::shadow_unrelated)]
+
     use std::collections::HashSet;
     use std::fmt::Debug;
     use std::hash::Hash;
@@ -270,7 +276,7 @@ mod test {
         let entries =
             TimeEntry::load(None, &client).await.expect("get entries");
         assert_eq!(entries.len(), initial_count + 1);
-        assert_eq!(entries[0].description, Some("Test".to_string()));
+        assert_eq!(entries[0].description, Some("Test".to_owned()));
         let (running, _) = TimeEntry::split_running(entries);
         assert!(running.is_some());
 
@@ -279,7 +285,7 @@ mod test {
             let entries =
                 TimeEntry::load(None, &client).await.expect("get entries");
             assert_eq!(entries.len(), initial_count + 1);
-            assert_eq!(entries[0].description, Some("Test".to_string()));
+            assert_eq!(entries[0].description, Some("Test".to_owned()));
             let (running, entries) = TimeEntry::split_running(entries);
             assert!(running.is_none());
             entries[0].clone()
@@ -288,37 +294,37 @@ mod test {
         // Respect API limits
         async_std::task::sleep(std::time::Duration::from_secs(1)).await;
         let mut last = {
-            last.description = Some("Other".to_string());
+            last.description = Some("Other".to_owned());
             last.save(&client).await.expect("update");
             let entries =
                 TimeEntry::load(None, &client).await.expect("get entries");
             assert_eq!(entries.len(), initial_count + 1);
-            assert_eq!(entries[0].description, Some("Other".to_string()));
+            assert_eq!(entries[0].description, Some("Other".to_owned()));
             entries[0].clone()
         };
 
         async_std::task::sleep(std::time::Duration::from_secs(1)).await;
         let mut last = {
-            last.tags = vec!["foo".to_string(), "bar".to_string()];
+            last.tags = vec!["foo".to_owned(), "bar".to_owned()];
             last.save(&client).await.expect("update");
             let entries =
                 TimeEntry::load(None, &client).await.expect("get entries");
             assert_ignore_order(
                 entries[0].tags.clone(),
-                vec!["foo".to_string(), "bar".to_string()],
+                vec!["foo".to_owned(), "bar".to_owned()],
             );
             entries[0].clone()
         };
 
         async_std::task::sleep(std::time::Duration::from_secs(1)).await;
         let last = {
-            last.tags = vec!["foo".to_string(), "baz".to_string()];
+            last.tags = vec!["foo".to_owned(), "baz".to_owned()];
             last.save(&client).await.expect("update");
             let entries =
                 TimeEntry::load(None, &client).await.expect("get entries");
             assert_ignore_order(
                 entries[0].tags.clone(),
-                vec!["foo".to_string(), "baz".to_string()],
+                vec!["foo".to_owned(), "baz".to_owned()],
             );
             entries[0].clone()
         };

@@ -4,7 +4,7 @@ use iced_aw::menu;
 
 const MENU_TEXT_SIZE: u16 = 11;
 
-pub fn default_button_text<'a>(content: impl ToString) -> text::Text<'a> {
+pub fn default_button_text<'a>(content: &impl ToString) -> text::Text<'a> {
     text(content.to_string()).size(MENU_TEXT_SIZE)
 }
 
@@ -32,7 +32,7 @@ pub fn menu_button<'a, T>(
 }
 
 pub fn menu_select_item<'a, T: Clone + 'a>(
-    content: impl ToString,
+    content: &impl ToString,
     selected: bool,
     message: T,
 ) -> menu::Item<'a, T, iced::Theme, iced::Renderer> {
@@ -43,20 +43,20 @@ pub fn menu_select_item<'a, T: Clone + 'a>(
 }
 
 pub fn menu_text_disabled<'a, T>(
-    content: impl ToString,
+    content: &impl ToString,
 ) -> button::Button<'a, T> {
     menu_button(default_button_text(content), None)
 }
 
 pub fn menu_text<'a, T>(
-    content: impl ToString,
+    content: &impl ToString,
     message: T,
 ) -> button::Button<'a, T> {
     menu_button(default_button_text(content), Some(message))
 }
 
 pub fn top_level_menu_text<'a, T>(
-    content: impl ToString,
+    content: &impl ToString,
     message: T,
 ) -> button::Button<'a, T> {
     menu_text(content, message).width(iced::Length::Shrink)
