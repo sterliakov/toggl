@@ -150,7 +150,7 @@ impl Profile {
         let old = self
             .time_entries
             .iter()
-            .filter(|&e| (e.start >= mon))
+            .filter(|&e| e.start >= mon)
             .map(super::time_entry::TimeEntry::get_duration)
             .sum();
         self.running_entry
