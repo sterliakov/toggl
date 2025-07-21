@@ -198,7 +198,6 @@ fn with_time(
         })
 }
 
-#[expect(clippy::return_and_then)]
 fn with_date(
     dt: Option<DateTime<Local>>,
     date: Date,
