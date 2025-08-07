@@ -32,7 +32,7 @@ repos:
         exclude: ^Cargo.lock$
 
   - repo: https://github.com/adhtruong/mirrors-typos
-    rev: v1.34.0
+    rev: v1.35.1
     hooks:
       - id: typos
 
