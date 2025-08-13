@@ -141,6 +141,7 @@ jobs:
     needs: [create-release, upload-assets]
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       id-token: write
     steps:
       - uses: actions/checkout@v5
@@ -154,6 +155,7 @@ jobs:
       - name: Publish the package
         shell: bash
         run: |
+          npm install -g npm@latest
           cd npm/main
           cp ../../README.md ./
           cp ../../LICENSE ./
