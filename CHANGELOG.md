@@ -1,6 +1,7 @@
-## 0.3.1 (unreleased)
+## 0.3.1
 
 * bugfix: removed unused dependencies
+* feat: switched to trusted publishing
 
 ## 0.3.0
 
