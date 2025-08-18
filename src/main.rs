@@ -2,6 +2,7 @@
 #![allow(clippy::unreadable_literal)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::unsafe_derive_deserialize)]
+#![allow(clippy::enum_glob_use)]
 #![deny(clippy::shadow_unrelated)]
 #![deny(clippy::str_to_string)]
 #![deny(clippy::unused_trait_names)]

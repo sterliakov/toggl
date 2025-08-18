@@ -1,3 +1,7 @@
+## 0.3.3 (unreleased)
+
+* bugfix: do not assume that running entry started this week
+
 ## 0.3.2
 
 This release is a fix for a failed release of 0.3.1.
