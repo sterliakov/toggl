@@ -147,15 +147,12 @@ impl Profile {
 
     pub fn week_total(&self) -> Duration {
         let mon = self.customization.to_start_of_week(Local::now());
-        let old = self
-            .time_entries
+        self.running_entry
             .iter()
+            .chain(self.time_entries.iter())
             .filter(|&e| e.start >= mon)
             .map(super::time_entry::TimeEntry::get_duration)
-            .sum();
-        self.running_entry
-            .as_ref()
-            .map_or(old, |e| old + e.get_duration())
+            .sum()
     }
 
     fn sort_entries(&mut self) {
