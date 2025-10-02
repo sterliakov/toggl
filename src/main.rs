@@ -22,6 +22,7 @@ use iced::keyboard::key::Named as NamedKey;
 use iced::widget::{
     button, center, column, container, horizontal_rule, row, scrollable, text,
 };
+use iced::window::settings::PlatformSpecific;
 use iced::{keyboard, window, Center, Element, Fill, Padding, Task as Command};
 use iced_aw::menu;
 use iced_fonts::Bootstrap;
@@ -67,14 +68,21 @@ pub fn main() -> iced::Result {
     iced::application(App::title, App::update, App::view)
         .subscription(App::subscription)
         .theme(App::theme)
-        .window_size((400.0, 600.0))
         .settings(iced::Settings {
             default_text_size: 14.into(),
             fonts: vec![
                 iced_fonts::BOOTSTRAP_FONT_BYTES.into(),
                 iced_fonts::REQUIRED_FONT_BYTES.into(),
             ],
-            ..iced::Settings::default()
+            ..Default::default()
+        })
+        .window(window::Settings {
+            size: (400.0, 600.0).into(),
+            platform_specific: PlatformSpecific {
+                application_id: "toggl".to_owned(),
+                ..Default::default()
+            },
+            ..Default::default()
         })
         .run_with(App::new)
 }
