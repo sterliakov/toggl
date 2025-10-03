@@ -1,7 +1,8 @@
-## 0.3.3 (unreleased)
+## 0.3.3
 
 * bugfix: do not assume that running entry started this week
-* feat: set `WM_CLASS` to `"toggl"` for the application window
+* feat: set `WM_CLASS` to `"toggl"` for the application window ([#107](https://github.com/sterliakov/toggl/issues/107))
+* feat: prevent opening multiple windows, focus the existing one instead
 
 ## 0.3.2
 

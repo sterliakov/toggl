@@ -18,7 +18,9 @@ use std::sync::LazyLock;
 use clap::{crate_version, Parser as _};
 use entities::Preferences;
 use iced::alignment::Horizontal;
+use iced::futures::StreamExt as _;
 use iced::keyboard::key::Named as NamedKey;
+use iced::stream::try_channel;
 use iced::widget::{
     button, center, column, container, horizontal_rule, row, scrollable, text,
 };
@@ -36,6 +38,7 @@ use widgets::{default_button_text, menu_button, menu_icon};
 mod cli;
 mod customization;
 mod entities;
+mod run_lock;
 mod screens;
 mod state;
 #[cfg(test)]
@@ -64,6 +67,26 @@ pub fn main() -> iced::Result {
     env_logger::init();
     if CliArgs::parse().run().is_some() {
         return Ok(());
+    }
+    // Check this before launching the UI to prevent a flickering window
+    // that will be closed immediately
+    match run_lock::ping_other_sync() {
+        Ok(run_lock::PingResult::Alive) => {
+            log::warn!("Another instance is already running.");
+            return Ok(());
+        }
+        Ok(run_lock::PingResult::Dead) => {
+            log::warn!("Found a dead skeleton of a previous instance.");
+        }
+        Ok(run_lock::PingResult::Hacked) => {
+            log::warn!("Check your computer, you might have some strange software around.");
+        }
+        Ok(run_lock::PingResult::NotFound) => {}
+        Err(_) => {
+            log::warn!(
+                "Failed to ping the existing app for some mysterious reason."
+            );
+        }
     }
     iced::application(App::title, App::update, App::view)
         .subscription(App::subscription)
@@ -126,6 +149,8 @@ enum Message {
     LoadMore,
     LoadedMore(Vec<TimeEntry>),
     Tick,
+    Focus,
+    Quit,
     Reload,
     Logout(String),
     LogoutDone,
@@ -197,6 +222,34 @@ impl App {
                 if let Some(id) = id {
                     return window::change_icon(id, self.icon());
                 }
+            }
+            Message::Focus => {
+                if let Some(id) = self.window_id {
+                    debug!("Received a focus request");
+                    return window::maximize::<()>(id, false)
+                        .chain(window::gain_focus(id))
+                        .map(|()| Message::Discarded);
+                }
+                log::warn!("Ignored a focus request: no window id yet.");
+                // Retry a bit later
+                return Command::future(async {
+                    tokio::time::sleep(std::time::Duration::from_millis(100))
+                        .await;
+                    Message::Focus
+                });
+            }
+            Message::Quit => {
+                if let Some(id) = self.window_id {
+                    debug!("Closing as requested");
+                    return window::close(id);
+                }
+                log::warn!("Ignored a close request: no window id yet.");
+                // Retry a bit later
+                return Command::future(async {
+                    tokio::time::sleep(std::time::Duration::from_millis(100))
+                        .await;
+                    Message::Quit
+                });
             }
             Message::DataFetched(context) => {
                 info!("Loaded initial data.");
@@ -797,6 +850,20 @@ impl App {
                     _ => None,
                 }
             }),
+            iced::Subscription::run_with_id(
+                0,
+                try_channel(1, run_lock::listener).map(|r| match r {
+                    Ok(run_lock::ListenerMessage::AnotherStarted) => {
+                        // Prevented launching another window, bring this to front
+                        Message::Focus
+                    }
+                    Err(run_lock::ListenerStartError::AlreadyExists) => {
+                        // Another instance has started after our initial ping
+                        Message::Quit
+                    }
+                    _ => Message::Discarded,
+                }),
+            ),
         ])
     }
 
