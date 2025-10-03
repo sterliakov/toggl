@@ -1,4 +1,4 @@
-## 0.3.3 (unreleased)
+## 0.3.3
 
 * bugfix: do not assume that running entry started this week
 * feat: set `WM_CLASS` to `"toggl"` for the application window ([#107](https://github.com/sterliakov/toggl/issues/107))
