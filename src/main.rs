@@ -228,7 +228,7 @@ impl App {
                         .chain(window::gain_focus(id))
                         .map(|()| Message::Discarded);
                 }
-                debug!("Ignored a focus request: no window id yet.");
+                log::warn!("Ignored a focus request: no window id yet.");
             }
             Message::Quit => {
                 if let Some(id) = self.window_id {
