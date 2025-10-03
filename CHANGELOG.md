@@ -1,6 +1,7 @@
 ## 0.3.3 (unreleased)
 
 * bugfix: do not assume that running entry started this week
+* feat: set `WM_CLASS` to `"toggl"` for the application window
 
 ## 0.3.2
 
