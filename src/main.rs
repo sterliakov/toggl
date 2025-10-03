@@ -101,13 +101,23 @@ pub fn main() -> iced::Result {
         })
         .window(window::Settings {
             size: (400.0, 600.0).into(),
-            platform_specific: PlatformSpecific {
-                application_id: "toggl".to_owned(),
-                ..Default::default()
-            },
+            platform_specific: platform_specific(),
             ..Default::default()
         })
         .run_with(App::new)
+}
+
+#[cfg(target_os = "linux")]
+fn platform_specific() -> PlatformSpecific {
+    PlatformSpecific {
+        application_id: "toggl".to_owned(),
+        ..Default::default()
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn platform_specific() -> PlatformSpecific {
+    Default::default()
 }
 
 #[derive(Debug, Default)]
