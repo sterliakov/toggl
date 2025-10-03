@@ -178,8 +178,7 @@ pub async fn ping_other() -> io::Result<PingResult> {
 }
 
 fn get_sock_name() -> io::Result<Name<'static>> {
-    if false {
-        //GenericNamespaced::is_supported() {
+    if GenericNamespaced::is_supported() {
         SOCK_NAME.to_ns_name::<GenericNamespaced>()
     } else {
         SOCK_PATH.to_fs_name::<GenericFilePath>()
