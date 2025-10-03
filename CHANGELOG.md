@@ -1,3 +1,7 @@
+## 0.3.4
+
+This is a hotfix release for failed 0.3.3.
+
 ## 0.3.3
 
 * bugfix: do not assume that running entry started this week
