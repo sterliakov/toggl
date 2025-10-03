@@ -1,3 +1,4 @@
+/// Prevent opening multiple app windows
 use std::io;
 use std::sync::Arc;
 
@@ -19,14 +20,19 @@ const ACK_MESSAGE: &[u8] = b"ACK\n";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum ListenerMessage {
+    /// Someone tried to launch another window
     AnotherStarted,
+    /// Something went wrong when handling a socket message or connection
     Error,
+    /// Received unrecognized message via our socket
     Unknown,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum ListenerStartError {
+    /// Failed to bind to the socket, another instance is already running
     AlreadyExists,
+    /// Failed to bind to the socket for some other reason
     Error,
 }
 
@@ -39,6 +45,9 @@ impl From<io::Error> for ListenerStartError {
 pub async fn listener(
     report_to: Sender<ListenerMessage>,
 ) -> Result<(), ListenerStartError> {
+    //! Background socket server to notify other window candidates
+    //! that we're still alive.
+
     let name = get_sock_name()?;
 
     let opts = || ListenerOptions::new().name(name.clone());
@@ -114,9 +123,13 @@ pub async fn listener(
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum PingResult {
+    /// Found another running instance that acknowledged our ping
     Alive,
+    /// Something is listening on the socket but does not accept our connection
     Dead,
+    /// No other instance found
     NotFound,
+    /// ACK message not recognized
     Hacked,
 }
 
@@ -126,6 +139,7 @@ pub async fn ping_other_sync() -> io::Result<PingResult> {
 }
 
 pub async fn ping_other() -> io::Result<PingResult> {
+    //! Is there another running window of the app?
     let name = get_sock_name()?;
 
     let conn = match tokio::time::timeout(

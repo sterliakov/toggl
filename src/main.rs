@@ -68,6 +68,8 @@ pub fn main() -> iced::Result {
     if CliArgs::parse().run().is_some() {
         return Ok(());
     }
+    // Check this before launching the UI to prevent a flickering window
+    // that will be closed immediately
     match run_lock::ping_other_sync() {
         Ok(run_lock::PingResult::Alive) => {
             log::warn!("Another instance is already running.");
@@ -229,6 +231,12 @@ impl App {
                         .map(|()| Message::Discarded);
                 }
                 log::warn!("Ignored a focus request: no window id yet.");
+                // Retry a bit later
+                return Command::future(async {
+                    tokio::time::sleep(std::time::Duration::from_millis(100))
+                        .await;
+                    Message::Focus
+                });
             }
             Message::Quit => {
                 if let Some(id) = self.window_id {
@@ -236,6 +244,12 @@ impl App {
                     return window::close(id);
                 }
                 log::warn!("Ignored a close request: no window id yet.");
+                // Retry a bit later
+                return Command::future(async {
+                    tokio::time::sleep(std::time::Duration::from_millis(100))
+                        .await;
+                    Message::Quit
+                });
             }
             Message::DataFetched(context) => {
                 info!("Loaded initial data.");
@@ -840,9 +854,11 @@ impl App {
                 0,
                 try_channel(1, run_lock::listener).map(|r| match r {
                     Ok(run_lock::ListenerMessage::AnotherStarted) => {
+                        // Prevented launching another window, bring this to front
                         Message::Focus
                     }
                     Err(run_lock::ListenerStartError::AlreadyExists) => {
+                        // Another instance has started after our initial ping
                         Message::Quit
                     }
                     _ => Message::Discarded,
