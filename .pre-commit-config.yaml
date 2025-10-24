@@ -52,6 +52,6 @@ repos:
           - github.com/wasilibs/go-shellcheck/cmd/shellcheck@v0.11.1
 
   - repo: https://github.com/woodruffw/zizmor-pre-commit
-    rev: v1.15.2
+    rev: v1.16.0
     hooks:
       - id: zizmor
