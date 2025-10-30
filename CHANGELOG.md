@@ -1,3 +1,7 @@
+## 0.3.5 (unreleased)
+
+* bugfix: refresh icon (activity indicator) and clear error on profile change
+
 ## 0.3.4
 
 This is a hotfix release for failed 0.3.3.
