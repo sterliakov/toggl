@@ -443,6 +443,7 @@ impl App {
                 }
                 Message::Reload => {
                     debug!("Syncing with remote...");
+                    self.error.clear();
                     *temp_state = TemporaryState::default();
                     return self.load_entries();
                 }
@@ -462,7 +463,8 @@ impl App {
                 }
                 Message::SelectProfile(name) => {
                     self.state.select_profile(name);
-                    return self.save_state();
+                    self.error.clear();
+                    return self.save_state().chain(self.update_icon());
                 }
                 Message::SetUpdateStep(step) => {
                     temp_state.update_step = step;
