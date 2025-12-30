@@ -7,7 +7,7 @@ directories-next = "2.0.0"
 env_logger = "0.11.5"
 iced = {version = "0.13.1", features = ["tokio", "debug", "advanced", "image"]}
 iced_aw = {version = "0.12.2", features = ["badge", "drop_down", "menu", "date_picker", "time_picker"], default-features = false}
-iced_fonts = {version = "0.2.1", features = ["bootstrap", "required"]}
+iced_fonts = {version = "0.3.0", features = ["bootstrap", "required"]}
 interprocess = {version = "2.2.3", features = ["tokio"]}
 itertools = "0.14.0"
 log = {version = "0.4.22", features = ["max_level_trace", "release_max_level_info"]}
